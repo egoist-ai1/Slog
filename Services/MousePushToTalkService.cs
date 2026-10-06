@@ -44,6 +44,8 @@ public sealed class MousePushToTalkService : IDisposable
     private long _worstCallbackMicroseconds;
     private Point _lastWatchdogCursor;
     private bool _isHeld;
+    // True from a swallowed button-down until its matching button-up, so the pair is never split.
+    private bool _swallowUp;
     private volatile bool _ignoredForGame;
     private volatile bool _disposed;
 
@@ -275,6 +277,7 @@ public sealed class MousePushToTalkService : IDisposable
         // Written for every event, including mouse moves: this is what the watchdog observes.
         Volatile.Write(ref _lastHookTick, Environment.TickCount64);
 
+        var swallow = false;
         if (code >= 0 && !_disposed && (message == WmXButtonDown || message == WmXButtonUp))
         {
             try
@@ -296,13 +299,27 @@ public sealed class MousePushToTalkService : IDisposable
                         else
                         {
                             _isHeld = true;
+                            _swallowUp = true;
+                            swallow = true;
                             Raise(Pressed);
                         }
                     }
-                    else if (message == WmXButtonUp && _isHeld)
+                    else if (message == WmXButtonDown && _swallowUp)
                     {
-                        _isHeld = false;
-                        Raise(Released);
+                        swallow = true; // auto-repeat while held
+                    }
+                    else if (message == WmXButtonUp)
+                    {
+                        if (_isHeld)
+                        {
+                            _isHeld = false;
+                            Raise(Released);
+                        }
+                        if (_swallowUp)
+                        {
+                            _swallowUp = false;
+                            swallow = true;
+                        }
                     }
                 }
             }
@@ -313,7 +330,12 @@ public sealed class MousePushToTalkService : IDisposable
             }
         }
 
-        // Never suppress the side button: games and other applications receive their normal click.
+        // The configured dictation button is consumed so other applications (browser Back/Forward,
+        // Claude, editors) never see it. Foreground games are the exception and get their click.
+        if (swallow)
+        {
+            return 1;
+        }
         return CallNextHookEx(_hook, code, message, data);
     }
 
