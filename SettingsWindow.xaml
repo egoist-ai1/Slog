@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="Настройки — Молви"
+        Title="Настройки — Слог"
         Width="1040" Height="760" MinWidth="760" MinHeight="560"
         WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
         Background="{DynamicResource AppBackgroundBrush}"
@@ -322,7 +322,7 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal">
                     <Image Source="assets/EgoistVoice.png" Width="42" Height="52" Margin="0,0,14,0" VerticalAlignment="Center"
-                           RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Молви" />
+                           RenderOptions.BitmapScalingMode="HighQuality" AutomationProperties.Name="Слог" />
                     <StackPanel>
                     <TextBlock Text="Центр управления" FontSize="28" FontWeight="SemiBold" />
                     <TextBlock Text="Диктовка, микрофон, перевод и внешний вид — в одном окне."
@@ -419,7 +419,7 @@
                                         <Button Content="Открыть словарь" Style="{StaticResource CompactButton}"
                                                 Click="OpenDictionaryButton_OnClick" AutomationProperties.Name="Открыть пользовательский словарь" />
                                         <Button x:Name="ExitButton" Content="Выйти из приложения" Style="{StaticResource DangerButton}"
-                                                Click="ExitButton_OnClick" AutomationProperties.Name="Выйти из Молви" />
+                                                Click="ExitButton_OnClick" AutomationProperties.Name="Выйти из Слог" />
                                     </StackPanel>
                                 </Grid>
                             </Border>
@@ -683,7 +683,7 @@
                                     <TextBlock Text="Движение" Style="{StaticResource SectionTitle}" />
                                     <TextBlock x:Name="MotionStatus" Style="{StaticResource Hint}"
                                                AutomationProperties.Name="Состояние анимаций" />
-                                    <TextBlock Text="Молви автоматически упрощает переходы и отключает непрерывные эффекты, когда Windows выключает анимации или включает высокую контрастность."
+                                    <TextBlock Text="Слог автоматически упрощает переходы и отключает непрерывные эффекты, когда Windows выключает анимации или включает высокую контрастность."
                                                Style="{StaticResource Hint}" Margin="0,8,0,0" />
                                 </StackPanel>
                             </Border>

@@ -54,7 +54,7 @@ public partial class App
             {
                 MessageBox.Show(
                     $"В {CorpusScript.FileName} нет ни одной фразы.",
-                    "Молви", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "Слог", MessageBoxButton.OK, MessageBoxImage.Warning);
                 Shutdown();
                 return;
             }
@@ -70,7 +70,7 @@ public partial class App
             AppLog.Write($"Corpus recorder failed type={exception.GetType().Name}");
             MessageBox.Show(
                 exception.Message,
-                "Молви", MessageBoxButton.OK, MessageBoxImage.Error);
+                "Слог", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
     }
@@ -123,8 +123,8 @@ public partial class App
             AdvancePastRecorded();
 
             Title = profileId is null
-                ? "Молви — начитка корпуса"
-                : $"Молви — начитка {profileId}";
+                ? "Слог — начитка корпуса"
+                : $"Слог — начитка {profileId}";
             Width = 900;
             Height = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;

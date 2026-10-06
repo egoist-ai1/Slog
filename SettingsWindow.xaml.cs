@@ -197,7 +197,7 @@ public partial class SettingsWindow : Window
         UpdateTranslationEngineState(new TranslationEngineHealth(
             TranslationEngineHealthState.RepairRequired,
             "Нужно восстановить движок",
-            "Runtime-пакет повреждён или неполон. Переустановите Молви и повторите проверку.",
+            "Runtime-пакет повреждён или неполон. Переустановите Слог и повторите проверку.",
             CanRetry: true));
     }
 

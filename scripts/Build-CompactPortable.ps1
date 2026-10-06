@@ -47,7 +47,7 @@ try {
 $models = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 if (@($models).Count -ne 1 -or $models[0].Id -ne 'whisper-large-v3-turbo-q5_0-v1' -or $models[0].SizeBytes -ne 574041195 -or
     $models[0].Sha256 -ne '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2') {
-    throw 'Molvi requires exactly the pinned Whisper large-v3-turbo q5_0 asset (574041195 bytes).'
+    throw 'Slog requires exactly the pinned Whisper large-v3-turbo q5_0 asset (574041195 bytes).'
 }
 foreach ($model in $models) {
     if ($model.Id -notmatch '^whisper-[a-z0-9_-]+$' -or $model.FileName -notmatch '^[a-zA-Z0-9_.-]+$') { throw 'Invalid catalog path.' }
@@ -76,7 +76,7 @@ if (Test-Path -LiteralPath $licenseSource -PathType Container) {
 Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.md') -Destination $destination
 [IO.File]::WriteAllText((Join-Path $destination 'START-HERE.txt'), @'
-Молви — офлайн-диктовка на русском. Windows 10 (1903 и новее) / Windows 11, x64
+Слог — офлайн-диктовка на русском. Windows 10 (1903 и новее) / Windows 11, x64
 
 Запустите Egoist.Voice.exe из установленной или перенесённой целиком папки.
 .NET не нужен. Модель включена; сеть не требуется.

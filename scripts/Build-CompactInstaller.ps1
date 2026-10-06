@@ -31,7 +31,7 @@ $lines = foreach ($item in $manifest.files) {
 }
 $compiler = Join-Path $env:USERPROFILE '.nuget\packages\dotnet-innosetup\6.2.1\tools\is\ISCC.exe'
 if (!(Test-Path -LiteralPath $compiler)) { throw 'Restore the pinned dotnet tool manifest before building.' }
-$installer = Join-Path $output ('Molvi-Setup-' + $version + '-win-x64.exe')
+$installer = Join-Path $output ('Slog-Setup-' + $version + '-win-x64.exe')
 if (!$Build) {
     [pscustomobject]@{passed=$true;planOnly=$true;files=$actual.Count;unpackedBytes=$manifest.unpackedBytes;installer=$installer;compiler=$compiler} | ConvertTo-Json
     exit 0
