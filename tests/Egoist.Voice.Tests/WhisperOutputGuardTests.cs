@@ -27,3 +27,17 @@ public class WhisperOutputGuardTests
     public void Short_emphasis_is_kept() =>
         Assert.Equal("да да да нет", WhisperOutputGuard.Clean("да да да нет"));
 }
+
+public class MisheardModelNameTests
+{
+    [Theory]
+    [InlineData("Я говорил gigi M и удали его", "GigaAM")]
+    [InlineData("Иссаги ГМ удалить", "GigaAM")]
+    [InlineData("модель виспер работает", "Whisper")]
+    public void Misheard_model_names_are_repaired(string spoken, string expected)
+    {
+        var text = new Egoist.Voice.Core.TranscriptPostProcessor(Egoist.Voice.Core.UserDictionary.BuiltIn,
+            new Egoist.Voice.Core.PostProcessingOptions(ApplyNumberNormalization: true)).Process(spoken);
+        Assert.Contains(expected, text);
+    }
+}

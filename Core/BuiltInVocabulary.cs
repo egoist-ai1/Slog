@@ -17,7 +17,7 @@ namespace Egoist.Voice.Core;
 /// </remarks>
 public static class BuiltInVocabulary
 {
-    public const string Version = "8";
+    public const string Version = "9";
 
     // Audio-confirmed formatting only, never added to the unconditional user dictionary.
     // These consonant-stem names keep the exact Russian case ending supplied by both ASRs.
@@ -130,7 +130,8 @@ public static class BuiltInVocabulary
         new(["миджорни", "мид джорни", "midjourney"], "Midjourney"),
         new(["хаггинг фейс", "хагин фейс", "hugging face"], "Hugging Face"),
         new(["гигачат", "гига чат", "gigachat"], "GigaChat"),
-        new(["гига ам", "гигаам", "gigaam"], "GigaAM"),
+        new(["гига ам", "гигаам", "gigaam", "гига эм", "гигаэм", "гига-эм", "gigi m", "gigi em", "gigi-m", "gigim", "giga m", "giga em", "иссаги гм", "иссаги джи эм"], "GigaAM"),
+        new(["виспер", "уиспер", "вишпер"], "Whisper"),
         new(["кьювен", "квен", "квэн", "qwen"], "Qwen"),
         new(["оллама", "ollama"], "Ollama"),
         new(["грок", "grok"], "Grok"),
