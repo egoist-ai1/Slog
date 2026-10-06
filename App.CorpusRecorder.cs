@@ -54,7 +54,7 @@ public partial class App
             {
                 MessageBox.Show(
                     $"В {CorpusScript.FileName} нет ни одной фразы.",
-                    "Egoist Voice", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "Молви", MessageBoxButton.OK, MessageBoxImage.Warning);
                 Shutdown();
                 return;
             }
@@ -70,7 +70,7 @@ public partial class App
             AppLog.Write($"Corpus recorder failed type={exception.GetType().Name}");
             MessageBox.Show(
                 exception.Message,
-                "Egoist Voice", MessageBoxButton.OK, MessageBoxImage.Error);
+                "Молви", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
     }
@@ -123,8 +123,8 @@ public partial class App
             AdvancePastRecorded();
 
             Title = profileId is null
-                ? "Egoist Voice — начитка корпуса"
-                : $"Egoist Voice — начитка {profileId}";
+                ? "Молви — начитка корпуса"
+                : $"Молви — начитка {profileId}";
             Width = 900;
             Height = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;

@@ -55,7 +55,7 @@ public static class ModelProgressFormatter
     public static string TrayTooltip(ModelTransferProgress progress)
     {
         var eta = progress.EstimatedRemaining is null ? string.Empty : $" · ~{FormatEta(progress.EstimatedRemaining.Value)}";
-        return Truncate($"Egoist Voice · {progress.ModelName} {progress.Percentage:0}%{eta}", 63);
+        return Truncate($"Молви · {progress.ModelName} {progress.Percentage:0}%{eta}", 63);
     }
 
     public static string Detail(ModelTransferProgress progress)

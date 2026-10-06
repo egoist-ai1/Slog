@@ -53,7 +53,7 @@ internal static class CapsuleWaveformProfile
 
     internal static SolidColorBrush CreateBarBrush(int index, int count)
     {
-        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 36, 72));
+        var brush = new SolidColorBrush(System.Windows.Media.Color.FromRgb(168, 255, 0));
         brush.Freeze();
         return brush;
     }

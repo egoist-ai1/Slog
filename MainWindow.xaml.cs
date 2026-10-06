@@ -16,7 +16,7 @@ namespace Egoist.Voice;
 
 public partial class MainWindow : Window, IDisposable
 {
-    private static readonly SolidColorBrush ActiveDiscBrush = FrozenBrush("#FF2448");
+    private static readonly SolidColorBrush ActiveDiscBrush = FrozenBrush("#A8FF00");
     private static readonly SolidColorBrush SuccessDiscBrush = FrozenBrush("#00000000");
     private static readonly SolidColorBrush CapsuleInkBrush = FrozenBrush("#000000");
     private static readonly SolidColorBrush CapsuleTextBrush = FrozenBrush("#FAFAFA");

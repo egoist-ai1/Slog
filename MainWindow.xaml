@@ -2,7 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:Egoist.Voice.Controls"
-        Title="Egoist Voice"
+        Title="Молви"
         Width="280" Height="88"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
@@ -296,7 +296,7 @@
             <Border x:Name="ShadowSurface" Visibility="Collapsed" IsHitTestVisible="False" />
 
             <controls:CapsuleStatusSurface x:Name="CapsuleShell" Opacity="1" RenderTransformOrigin="0.5,0.5"
-                  AutomationProperties.Name="Egoist Voice"
+                  AutomationProperties.Name="Молви"
                   AutomationProperties.LiveSetting="Polite">
             <Grid.RenderTransform>
                 <TransformGroup>
@@ -392,7 +392,7 @@
                                 <Grid>
                                     <Canvas x:Name="MicIcon" Width="18" Height="18"
                                             HorizontalAlignment="Center" VerticalAlignment="Center">
-                                        <Path Stroke="{DynamicResource AppTextPrimaryBrush}" StrokeThickness="1.35"
+                                        <Path Stroke="#A8FF00" StrokeThickness="1.5"
                                               StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                               StrokeLineJoin="Round" Opacity="0.94"
                                               Data="M 6.3,5.6 A 2.7,2.7 0 0 1 11.7,5.6 L 11.7,8.3 A 2.7,2.7 0 0 1 6.3,8.3 Z
@@ -404,7 +404,7 @@
                                             HorizontalAlignment="Center" VerticalAlignment="Center"
                                             RenderTransformOrigin="0.5,0.5">
                                         <Canvas.RenderTransform><ScaleTransform x:Name="CheckScale" /></Canvas.RenderTransform>
-                                        <Path Stroke="{DynamicResource AppSuccessBrush}" StrokeThickness="1.6"
+                                        <Path Stroke="#C6FF3D" StrokeThickness="1.6"
                                               StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                               StrokeLineJoin="Round" Opacity="0.95"
                                               Data="M 4.2,9.4 L 7.6,12.9 L 13.8,5.6" />
@@ -413,7 +413,7 @@
                                                FontFamily="Segoe Fluent Icons" Foreground="{DynamicResource AppTextPrimaryBrush}" FontSize="14"
                                                TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     <Grid x:Name="SpinnerIcon" Visibility="Collapsed" Width="18" Height="18">
-                                        <Path Stroke="{DynamicResource AppAccentBrush}" StrokeThickness="1.9"
+                                        <Path Stroke="#A8FF00" StrokeThickness="1.9"
                                               StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                               Data="M 9,1.6 A 7.4,7.4 0 1 1 1.6,9"
                                               RenderTransformOrigin="0.5,0.5">
@@ -421,7 +421,7 @@
                                         </Path>
                                     </Grid>
                                     <TextBlock x:Name="DownloadIcon" Visibility="Collapsed" Text="&#xE896;"
-                                               FontFamily="Segoe Fluent Icons" Foreground="{DynamicResource AppAccentBrush}" FontSize="15"
+                                               FontFamily="Segoe Fluent Icons" Foreground="#A8FF00" FontSize="15"
                                                TextAlignment="Center" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <TextBlock.RenderTransform><TranslateTransform x:Name="DownloadArrowOffset" /></TextBlock.RenderTransform>
                                     </TextBlock>
@@ -459,15 +459,15 @@
                                            TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" />
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="5,2,0,0" VerticalAlignment="Center">
                                     <Ellipse x:Name="ProcessingDot1" Width="3.5" Height="3.5" Margin="1.5,0"
-                                             Fill="{DynamicResource AppAccentBrush}" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
+                                             Fill="#A8FF00" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
                                         <Ellipse.RenderTransform><ScaleTransform x:Name="ProcessingDot1Scale" /></Ellipse.RenderTransform>
                                     </Ellipse>
                                     <Ellipse x:Name="ProcessingDot2" Width="3.5" Height="3.5" Margin="1.5,0"
-                                             Fill="{DynamicResource AppAccentBrush}" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
+                                             Fill="#A8FF00" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
                                         <Ellipse.RenderTransform><ScaleTransform x:Name="ProcessingDot2Scale" /></Ellipse.RenderTransform>
                                     </Ellipse>
                                     <Ellipse x:Name="ProcessingDot3" Width="3.5" Height="3.5" Margin="1.5,0"
-                                             Fill="{DynamicResource AppAccentBrush}" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
+                                             Fill="#A8FF00" Opacity="0.25" RenderTransformOrigin="0.5,0.5">
                                         <Ellipse.RenderTransform><ScaleTransform x:Name="ProcessingDot3Scale" /></Ellipse.RenderTransform>
                                     </Ellipse>
                                 </StackPanel>
@@ -480,7 +480,7 @@
                             <ProgressBar x:Name="DownloadProgress" Visibility="Collapsed" Height="2"
                                          Margin="0,0,0,1" VerticalAlignment="Bottom" Minimum="0" Maximum="100"
                                          Background="{DynamicResource AppMeterTrackBrush}"
-                                         Foreground="{DynamicResource AppAccentBrush}" BorderThickness="0" />
+                                         Foreground="#A8FF00" BorderThickness="0" />
                         </Grid>
 
                         <TextBlock x:Name="RecordingTimer" Grid.Column="3" Visibility="Collapsed"
@@ -509,7 +509,7 @@
                                         </Trigger>
                                         <Trigger Property="IsPressed" Value="True">
                                             <Setter TargetName="ButtonBorder" Property="Background" Value="#35FFFFFF" />
-                                            <Setter TargetName="CrossPath" Property="Stroke" Value="{DynamicResource AppAccentBrush}" />
+                                            <Setter TargetName="CrossPath" Property="Stroke" Value="#A8FF00" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

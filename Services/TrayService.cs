@@ -144,7 +144,7 @@ public sealed class TrayService : IDisposable
         _notifyIcon = new Forms.NotifyIcon
         {
             Icon = _icon,
-            Text = "Egoist Voice — локальная диктовка",
+            Text = "Молви — локальная диктовка",
             // The control center is now the only tray surface. Keeping the legacy WinForms menu
             // attached would let Windows open it before MouseClick and recreate the illegible
             // light-theme popup reported by users.
@@ -260,7 +260,7 @@ public sealed class TrayService : IDisposable
 
         NotifyActionable(
             TrayNotificationKind.RecoveryRequired,
-            "Egoist Voice",
+            "Молви",
             error ?? "Не удалось сменить кнопку запуска.");
     }
 
@@ -293,7 +293,7 @@ public sealed class TrayService : IDisposable
 
         NotifyActionable(
             TrayNotificationKind.RecoveryRequired,
-            "Egoist Voice",
+            "Молви",
             error ?? "Не удалось назначить сочетание.");
     }
 
@@ -460,7 +460,7 @@ public sealed class TrayService : IDisposable
             && !string.Equals(message, _lastHistoryNotificationMessage, StringComparison.Ordinal))
         {
             _lastHistoryNotificationMessage = message;
-            NotifyActionable(TrayNotificationKind.HistoryFailure, "Egoist Voice · история", message!);
+            NotifyActionable(TrayNotificationKind.HistoryFailure, "Молви · история", message!);
         }
         else if (!TrayNotificationPolicy.IsActionableHistoryMessage(message))
         {
@@ -506,7 +506,7 @@ public sealed class TrayService : IDisposable
 
     private void ShowMicrophoneWarning(string message) => NotifyActionable(
         TrayNotificationKind.MicrophoneUnavailable,
-        "Egoist Voice · микрофон",
+        "Молви · микрофон",
         string.IsNullOrWhiteSpace(message) ? "Микрофон недоступен." : message);
 
     private void NotifyActionable(TrayNotificationKind kind, string title, string message)
@@ -566,7 +566,7 @@ public sealed class TrayService : IDisposable
             return;
         }
         var status = state.IsUserPaused ? "пауза" : state.IsTransientlyUnavailable ? "микрофон недоступен" : state.IsAvailable ? "готов" : "нет микрофона";
-        _notifyIcon.Text = TruncateTooltip($"Egoist Voice — {status} · {ShortDeviceName(state.DeviceName)}");
+        _notifyIcon.Text = TruncateTooltip($"Молви — {status} · {ShortDeviceName(state.DeviceName)}");
     }
 
     private static string ShortDeviceName(string value) => value.Length <= 25 ? value : value[..24] + "…";
@@ -615,7 +615,7 @@ public sealed class TrayService : IDisposable
         {
             NotifyActionable(
                 TrayNotificationKind.ModelFailure,
-                "Egoist Voice · модели",
+                "Молви · модели",
                 "Не удалось подготовить модель. Откройте центр управления → Распознавание и нажмите «Повторить».");
         }
     }

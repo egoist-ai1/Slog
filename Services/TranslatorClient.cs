@@ -285,17 +285,17 @@ public sealed class TranslatorClient : IDisposable
             EngineState.Missing => new TranslationEngineHealth(
                 TranslationEngineHealthState.Missing,
                 "Движок перевода не установлен",
-                "Переустановите Egoist Voice с полным офлайн-пакетом.",
+                "Переустановите Молви с полным офлайн-пакетом.",
                 CanRetry: true),
             EngineState.Corrupt => new TranslationEngineHealth(
                 TranslationEngineHealthState.RepairRequired,
                 "Нужно восстановить движок",
-                "Runtime-пакет повреждён или неполон. Переустановите Egoist Voice и повторите проверку.",
+                "Runtime-пакет повреждён или неполон. Переустановите Молви и повторите проверку.",
                 CanRetry: true),
             EngineState.Incompatible => new TranslationEngineHealth(
                 TranslationEngineHealthState.Incompatible,
                 "Версии движка несовместимы",
-                "Обновите общий офлайн-движок и Egoist Voice до согласованных версий.",
+                "Обновите общий офлайн-движок и Молви до согласованных версий.",
                 CanRetry: true),
             _ => Unavailable()
         };
@@ -306,7 +306,7 @@ public sealed class TranslatorClient : IDisposable
         ProtocolErrorCode.EngineMissing => new TranslationEngineHealth(
             TranslationEngineHealthState.Missing,
             "Движок перевода не найден",
-            "Переустановите Egoist Voice с полным офлайн-пакетом.",
+            "Переустановите Молви с полным офлайн-пакетом.",
             CanRetry: true),
         ProtocolErrorCode.ModelMismatch => new TranslationEngineHealth(
             TranslationEngineHealthState.RepairRequired,
@@ -316,7 +316,7 @@ public sealed class TranslatorClient : IDisposable
         ProtocolErrorCode.IncompatibleClient => new TranslationEngineHealth(
             TranslationEngineHealthState.Incompatible,
             "Версии движка несовместимы",
-            "Обновите общий офлайн-движок и Egoist Voice до согласованных версий.",
+            "Обновите общий офлайн-движок и Молви до согласованных версий.",
             CanRetry: true),
         _ => Unavailable()
     };

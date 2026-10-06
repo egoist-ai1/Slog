@@ -10,15 +10,15 @@
     <SolidColorBrush x:Key="AppTextMutedBrush" Color="#A3A3AA" />
     <SolidColorBrush x:Key="AppTextDisabledBrush" Color="#707078" />
     <SolidColorBrush x:Key="AppControlBrush" Color="#202026" />
-    <SolidColorBrush x:Key="AppControlHoverBrush" Color="#35151A" />
-    <SolidColorBrush x:Key="AppControlPressedBrush" Color="#4A171E" />
-    <SolidColorBrush x:Key="AppSubtleFocusBrush" Color="#221217" />
-    <SolidColorBrush x:Key="AppAccentBrush" Color="#FF2634" />
-    <SolidColorBrush x:Key="AppAccentTextBrush" Color="#FFFFFF" />
-    <SolidColorBrush x:Key="AppAccentBorderBrush" Color="#70202A" />
-    <SolidColorBrush x:Key="AppSelectionBrush" Color="#4A171E" />
+    <SolidColorBrush x:Key="AppControlHoverBrush" Color="#1D2809" />
+    <SolidColorBrush x:Key="AppControlPressedBrush" Color="#2A3A0B" />
+    <SolidColorBrush x:Key="AppSubtleFocusBrush" Color="#141B08" />
+    <SolidColorBrush x:Key="AppAccentBrush" Color="#A8FF00" />
+    <SolidColorBrush x:Key="AppAccentTextBrush" Color="#0A0F00" />
+    <SolidColorBrush x:Key="AppAccentBorderBrush" Color="#5C9400" />
+    <SolidColorBrush x:Key="AppSelectionBrush" Color="#2A3A0B" />
     <SolidColorBrush x:Key="AppSelectionTextBrush" Color="#F7F7F8" />
-    <SolidColorBrush x:Key="AppSelectionIconBrush" Color="#FF2634" />
+    <SolidColorBrush x:Key="AppSelectionIconBrush" Color="#A8FF00" />
     <SolidColorBrush x:Key="AppMeterTrackBrush" Color="#25252A" />
     <SolidColorBrush x:Key="AppListBorderBrush" Color="#303038" />
     <SolidColorBrush x:Key="AppIconBrush" Color="#C8C8CE" />

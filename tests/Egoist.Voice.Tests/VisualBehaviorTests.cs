@@ -32,14 +32,14 @@ public sealed class VisualBehaviorTests
     }
 
     [Fact]
-    public void Flat_waveform_uses_the_same_scarlet_at_the_edges_and_centre()
+    public void Flat_waveform_uses_the_same_lime_at_the_edges_and_centre()
     {
         var centre = CapsuleWaveformProfile.CreateBarBrush(
             CapsuleWaveformProfile.BarCount / 2, CapsuleWaveformProfile.BarCount).Color;
         var edge = CapsuleWaveformProfile.CreateBarBrush(0, CapsuleWaveformProfile.BarCount).Color;
 
         Assert.Equal(centre, edge);
-        Assert.Equal(System.Windows.Media.Color.FromRgb(255, 36, 72), centre);
+        Assert.Equal(System.Windows.Media.Color.FromRgb(168, 255, 0), centre);
     }
 
     [Fact]
