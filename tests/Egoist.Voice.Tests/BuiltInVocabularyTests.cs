@@ -186,7 +186,7 @@ public sealed class BuiltInVocabularyTests
     [Fact]
     public void Versioned_catalog_covers_ai_apps_companies_and_games()
     {
-        Assert.Equal("7", BuiltInVocabulary.Version);
+        Assert.Equal("8", BuiltInVocabulary.Version);
         var written = BuiltInVocabulary.Terms
             .Select(term => term.Written)
             .ToHashSet(StringComparer.Ordinal);

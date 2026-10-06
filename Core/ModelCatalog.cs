@@ -114,6 +114,8 @@ public static class ModelCatalog
     public static IReadOnlyList<ModelDescriptor> CreateFormattingModels() =>
         [GigaAmE2eEncoder, GigaAmE2eDecoder, GigaAmE2eJoiner, GigaAmE2eTokens];
 
+    public static IReadOnlyList<ModelDescriptor> CreateWhisperRussianModels() => [Whisper];
+
     public static IReadOnlyList<ModelDescriptor> CreateRussianQualityModels() =>
         [GigaAmEncoder, GigaAmDecoder, GigaAmJoiner, GigaAmTokens,
             GigaAmE2eEncoder, GigaAmE2eDecoder, GigaAmE2eJoiner, GigaAmE2eTokens];

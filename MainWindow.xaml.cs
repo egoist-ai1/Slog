@@ -746,6 +746,8 @@ public partial class MainWindow : Window, IDisposable
     private async Task StartRecordingAsync()
     {
         AppLog.Write("StartRecording requested");
+        // The recognizer unloads itself when idle; reload it while the user is still speaking.
+        if (_transcription is WhisperRussianService { IsLoaded: false }) BeginWarmUp(showProgress: false);
         _recentRecordings.StopPlayback();
         _forceHideAfterCancellation = false;
         _hideTimer.Stop();

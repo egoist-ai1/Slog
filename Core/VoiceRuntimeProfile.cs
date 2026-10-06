@@ -23,8 +23,8 @@ public static class VoiceRuntimeProfile
         ? Path.Combine(AppContext.BaseDirectory, "Models")
         : Path.Combine(DataRoot, "Models");
     public static IReadOnlyList<ModelDescriptor> Models => IsPortable
-        ? ModelCatalog.CreateRussianQualityModels() : ModelCatalog.CreateRequiredModels();
-    public static string Label => IsPortable ? "Русская речь · пунктуация · офлайн" : "Полная версия · GigaAM + Whisper";
+        ? ModelCatalog.CreateWhisperRussianModels() : ModelCatalog.CreateRequiredModels();
+    public static string Label => IsPortable ? "Русская речь · Whisper Turbo · офлайн" : "Полная версия · GigaAM + Whisper";
     public static ITranscriptionService CreateTranscription(IModelManager manager) => IsPortable
-        ? new RussianSpeechQualityService(manager) : new HybridTranscriptionService(manager);
+        ? new WhisperRussianService(manager) : new HybridTranscriptionService(manager);
 }

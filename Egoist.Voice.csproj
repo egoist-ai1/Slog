@@ -41,9 +41,9 @@
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.4" ExcludeAssets="runtime;native" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
-    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
-    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
   </ItemGroup>
 
   <ItemGroup>

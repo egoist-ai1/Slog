@@ -17,7 +17,7 @@ namespace Egoist.Voice.Core;
 /// </remarks>
 public static class BuiltInVocabulary
 {
-    public const string Version = "7";
+    public const string Version = "8";
 
     // Audio-confirmed formatting only, never added to the unconditional user dictionary.
     // These consonant-stem names keep the exact Russian case ending supplied by both ASRs.
@@ -643,6 +643,21 @@ public static class BuiltInVocabulary
                 "keep in touch", "кип ин тач"
             ],
             "keep in touch"),
+        new(
+            [
+                "клауд кот"
+            ],
+            "Claude Code"),
+        new(
+            [
+                "cloudfire", "cloud fire", "cloudfair"
+            ],
+            "Cloudflare"),
+        new(
+            [
+                "redem", "readme file", "ридми файл"
+            ],
+            "README"),
         new(
             [
                 "джессон", "джисон"
