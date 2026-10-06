@@ -17,7 +17,7 @@ namespace Egoist.Voice.Core;
 /// </remarks>
 public static class BuiltInVocabulary
 {
-    public const string Version = "6";
+    public const string Version = "7";
 
     // Audio-confirmed formatting only, never added to the unconditional user dictionary.
     // These consonant-stem names keep the exact Russian case ending supplied by both ASRs.
@@ -642,7 +642,157 @@ public static class BuiltInVocabulary
             [
                 "keep in touch", "кип ин тач"
             ],
-            "keep in touch")
+            "keep in touch"),
+        new(
+            [
+                "джессон", "джисон"
+            ],
+            "JSON"),
+        new(
+            [
+                "ридми", "ридем", "ридмэ"
+            ],
+            "README"),
+        new(
+            [
+                "ченчлок", "чейнджлог", "ченджлог"
+            ],
+            "CHANGELOG"),
+        new(
+            [
+                "лиценс"
+            ],
+            "LICENSE"),
+        new(
+            [
+                "кибернетис"
+            ],
+            "Kubernetes"),
+        new(
+            [
+                "джавоскрипт"
+            ],
+            "JavaScript"),
+        new(
+            [
+                "эскьюэль"
+            ],
+            "SQL"),
+        new(
+            [
+                "эскьюлайт"
+            ],
+            "SQLite"),
+        new(
+            [
+                "постгрес кьюэл", "постгрескьюэл", "пострегейс кьюэл", "постригей эскьюл", "постгре эскьюэль"
+            ],
+            "PostgreSQL"),
+        new(
+            [
+                "джетпак компоус", "джетпэк компоус", "джетпак композ"
+            ],
+            "Jetpack Compose"),
+        new(
+            [
+                "тест флайт", "тест-флайт"
+            ],
+            "TestFlight"),
+        new(
+            [
+                "анриал лэнджинс", "анриал инджин", "анрил энджин"
+            ],
+            "Unreal Engine"),
+        new(
+            [
+                "эпикгеймстор"
+            ],
+            "Epic Games Store"),
+        new(
+            [
+                "версал"
+            ],
+            "Vercel"),
+        new(
+            [
+                "клоудфаер", "клаудфлер", "клоудфлер", "клаудфлэйр"
+            ],
+            "Cloudflare"),
+        new(
+            [
+                "супобейс", "супабэйс"
+            ],
+            "Supabase"),
+        new(
+            [
+                "гитхав"
+            ],
+            "GitHub"),
+        new(
+            [
+                "гитхав копайлет", "гитхаб копайлет"
+            ],
+            "GitHub Copilot"),
+        new(
+            [
+                "давинчи изолф", "давинчи ризолв"
+            ],
+            "DaVinci Resolve"),
+        new(
+            [
+                "обс студия", "обс студио"
+            ],
+            "OBS Studio"),
+        new(
+            [
+                "повершел"
+            ],
+            "PowerShell"),
+        new(
+            [
+                "визуал студия код", "визуал студио код"
+            ],
+            "Visual Studio Code"),
+        new(
+            [
+                "но джиэс", "ноджс", "нод джей эс"
+            ],
+            "Node.js"),
+        new(
+            [
+                "некстиэс", "некст джс", "некстджс"
+            ],
+            "Next.js"),
+        new(
+            [
+                "амд"
+            ],
+            "AMD"),
+        new(
+            [
+                "нвидия"
+            ],
+            "NVIDIA"),
+        new(
+            [
+                "докер композ"
+            ],
+            "Docker Compose"),
+        new(
+            [
+                "иксход", "экскод"
+            ],
+            "Xcode"),
+        new(
+            [
+                "айос"
+            ],
+            "iOS"),
+        new(
+            [
+                "опэн эй ай", "опен эй ай", "оупен эй ай", "опенэйай", "опэн ай"
+            ],
+            "OpenAI")
     ];
 
     /// <summary>Safe general forms used by the conditional mixed-speech detector.</summary>
