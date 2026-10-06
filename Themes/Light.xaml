@@ -22,7 +22,7 @@
     <SolidColorBrush x:Key="AppMeterTrackBrush" Color="#DDDDE3" />
     <SolidColorBrush x:Key="AppListBorderBrush" Color="#D2D2D9" />
     <SolidColorBrush x:Key="AppIconBrush" Color="#44454D" />
-    <SolidColorBrush x:Key="AppSuccessBrush" Color="#16794B" />
+    <SolidColorBrush x:Key="AppSuccessBrush" Color="#4A8200" />
     <SolidColorBrush x:Key="AppWarningBrush" Color="#9A5A00" />
     <SolidColorBrush x:Key="AppDangerBrush" Color="#C20F25" />
 </ResourceDictionary>

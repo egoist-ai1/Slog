@@ -11,7 +11,7 @@ public static class ModelProgressFormatter
         if (allModelsReady)
         {
             return new RecognitionModelPresentation(
-                "GigaAM + Whisper · готовы к работе",
+                "Whisper turbo · готов к работе",
                 IsFailure: false,
                 ShowProgress: false,
                 CanRetry: false);
@@ -28,7 +28,7 @@ public static class ModelProgressFormatter
 
         return new RecognitionModelPresentation(
             progress is null || progress.Stage == ModelTransferStage.Waiting
-                ? "GigaAM + Whisper · ожидают подготовки"
+                ? "Whisper turbo · ожидает подготовки"
                 : Detail(progress),
             IsFailure: false,
             ShowProgress: true,

@@ -231,7 +231,7 @@ internal static class EgoistTrayVisualPreview
         root.Items.Add(themeItem);
         root.Items.Add(TrayService.CreateItem("Открыть все настройки…"));
         root.Items.Add(TrayService.CreateSeparator());
-        root.Items.Add(TrayService.CreateItem("GigaAM + Whisper · готовы"));
+        root.Items.Add(TrayService.CreateItem("Whisper turbo · готов"));
         root.Items[^1].Enabled = false;
         root.Items.Add(TrayService.CreateSeparator());
         root.Items.Add(TrayService.CreateItem("Выход"));
