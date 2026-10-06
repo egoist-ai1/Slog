@@ -1,5 +1,10 @@
 # История изменений
 
+
+## 3.0.0 — Слог
+
+Новое имя и фирменный стиль (лайм), капсула «лента голоса», Whisper large-v3-turbo (Vulkan, flash attention) вместо GigaAM, выгрузка модели в простое, Mouse 5 принадлежит приложению, словарь версии 8, защита от галлюцинаций Whisper. Подробнее: [docs/releases/3.0.0.md](docs/releases/3.0.0.md).
+
 ## 2.3.0 — 2026-10-02
 
 - One plain GigaAM v3 RNNT INT8 Russian CPU profile, measured precision/decoder/thread selection.
