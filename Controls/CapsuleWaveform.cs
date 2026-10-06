@@ -72,30 +72,44 @@ public sealed class CapsuleWaveform : FrameworkElement
         double.IsInfinity(availableSize.Width) ? CapsuleWaveformProfile.PreferredWidth : availableSize.Width,
         CapsuleWaveformProfile.BarHeight);
 
-    private static readonly Brush FrontBrush = CreateRibbonBrush(1.0);
-    private static readonly Brush MidBrush = CreateRibbonBrush(0.34);
-    private static readonly Brush BackBrush = CreateRibbonBrush(0.13);
-    private static readonly Pen CrestPen = CreateCrestPen();
+    private static readonly Brush BackBrush = CreateHorizontalFade(0.20);
+    private static readonly Brush MidBrush = CreateHorizontalFade(0.55);
+    private static readonly Brush FrontBrush = CreateBodyBrush();
+    private static readonly Pen CoreHalo = CreatePen(System.Windows.Media.Color.FromArgb(70, 214, 255, 92), 3.2);
+    private static readonly Pen CoreLine = CreatePen(System.Windows.Media.Color.FromArgb(235, 244, 255, 190), 1.0);
     private double _drift;
 
-    private static Brush CreateRibbonBrush(double opacity)
+    private static Pen CreatePen(System.Windows.Media.Color color, double thickness)
     {
-        // Lime that fades to nothing at both ends so the ribbon dissolves into the capsule.
+        var pen = new Pen(new SolidColorBrush(color), thickness) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+        pen.Freeze();
+        return pen;
+    }
+
+    private static Brush CreateHorizontalFade(double opacity)
+    {
+        var a = (byte)(255 * opacity);
         var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
         brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0, 168, 255, 0), 0));
-        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb((byte)(255 * opacity), 168, 255, 0), 0.22));
-        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb((byte)(255 * opacity), 214, 255, 92), 0.5));
-        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb((byte)(255 * opacity), 168, 255, 0), 0.78));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a, 168, 255, 0), 0.25));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a, 190, 255, 40), 0.5));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(a, 168, 255, 0), 0.75));
         brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0, 168, 255, 0), 1));
         brush.Freeze();
         return brush;
     }
 
-    private static Pen CreateCrestPen()
+    /// <summary>Solid body: deep lime at the rims, hot lime-white at the spine, like lit glass.</summary>
+    private static Brush CreateBodyBrush()
     {
-        var pen = new Pen(new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 232, 255, 150)), 0.9) { LineJoin = PenLineJoin.Round };
-        pen.Freeze();
-        return pen;
+        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(120, 205, 0), 0));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(176, 255, 20), 0.34));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(226, 255, 110), 0.5));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(176, 255, 20), 0.66));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromRgb(120, 205, 0), 1));
+        brush.Freeze();
+        return brush;
     }
 
     protected override void OnRender(DrawingContext drawingContext)
@@ -107,14 +121,48 @@ public sealed class CapsuleWaveform : FrameworkElement
             return;
         }
         _drift += 0.05;
-        // Three layers of one ribbon: a wide soft echo, a body, and a bright crest. The layers
-        // follow the same spectrum with a small phase lag, which is what reads as a flowing wave.
-        DrawRibbon(drawingContext, BackBrush, null, 1.0, lag: 2.0);
-        DrawRibbon(drawingContext, MidBrush, null, 0.86, lag: 1.0);
-        DrawRibbon(drawingContext, FrontBrush, CrestPen, 0.7, lag: 0);
+        // Echo, body, spine: the echo layers lag the body so the shape flows rather than pulses.
+        DrawRibbon(drawingContext, BackBrush, null, 1.08, lag: 2.2, tailFade: true);
+        DrawRibbon(drawingContext, MidBrush, null, 0.92, lag: 1.1, tailFade: true);
+        DrawRibbon(drawingContext, FrontBrush, null, 0.74, lag: 0, tailFade: false);
+        DrawSweep(drawingContext, 0.74);
+        DrawSpine(drawingContext);
     }
 
-    private void DrawRibbon(DrawingContext context, Brush fill, Pen? crest, double scale, double lag)
+    private void DrawSweep(DrawingContext context, double scale)
+    {
+        // A soft light travelling along the body: the part that makes it read as a lit object.
+        var position = (_drift * 0.11) % 1.6 - 0.3;
+        var brush = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 0) };
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0, 255, 255, 255), Math.Clamp(position - 0.16, 0, 1)));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(120, 255, 255, 225), Math.Clamp(position, 0, 1)));
+        brush.GradientStops.Add(new GradientStop(System.Windows.Media.Color.FromArgb(0, 255, 255, 255), Math.Clamp(position + 0.16, 0, 1)));
+        brush.Freeze();
+        DrawRibbon(context, brush, null, scale, lag: 0, tailFade: false);
+    }
+
+    private void DrawSpine(DrawingContext context)
+    {
+        var centre = ActualHeight / 2;
+        var cell = ActualWidth / _drawnLevels.Length;
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(cell * 0.5, centre), false, false);
+            g.LineTo(new Point(ActualWidth - cell * 0.5, centre), true, false);
+        }
+        geometry.Freeze();
+        var level = 0d;
+        foreach (var value in _drawnLevels) level = Math.Max(level, value);
+        // The spine only shows through when the body is thin (quiet), which keeps the idle state crisp.
+        if (level < 0.35)
+        {
+            context.DrawGeometry(null, CoreHalo, geometry);
+            context.DrawGeometry(null, CoreLine, geometry);
+        }
+    }
+
+    private void DrawRibbon(DrawingContext context, Brush fill, Pen? crest, double scale, double lag, bool tailFade)
     {
         var count = _drawnLevels.Length;
         var centre = ActualHeight / 2;

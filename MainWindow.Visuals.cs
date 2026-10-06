@@ -562,7 +562,8 @@ public partial class MainWindow
             };
             DetailText.Foreground = PrimaryTextBrush;
             ProcessingLabel.Foreground = PrimaryTextBrush;
-            SetMicStroke(AccentBrush);
+            SetMicStroke(_lastVisualStateKind is CapsuleVisualStateKind.Listening or CapsuleVisualStateKind.Recognizing
+                ? CapsuleInkBrush : AccentBrush);
             RecordingTimer.Foreground = CapsuleMutedBrush;
             CloseButton.Foreground = CapsuleMutedBrush;
             SetStroke(CheckIcon, AccentBrush);
