@@ -1,6 +1,6 @@
 # EV-2234 — current-model resource minimization
 
-Status: candidate 2.4.2, 2026-10-02. The owner requested further fast/stable current-model optimization with minimum practical resources. Existing build/install/publication authorization continues. Installed/public 2.4.1 remains the accepted baseline; no model replacement is required.
+Status: engineering maintenance delivered; 2.4.2 published and installed, 2026-10-02. The owner requested further fast/stable current-model optimization with minimum practical resources. Existing build/install/publication authorization continues. Previous2.4.1 remains immutable accepted baseline; current2.4.2 keeps the same models.
 
 Keep GigaAM v3 plain RNNT INT8 words plus E2E RNNT INT8 punctuation/case, CPU4, the eight pinned weights, PCM/chunk/tail/pre-roll and user preferences. Do not unload warm models or trim working sets to advertise lower RAM. Preserve DNS, private Data/history, the installer-on-workstation boundary and immutable previous releases.
 
@@ -11,7 +11,7 @@ Keep GigaAM v3 plain RNNT INT8 words plus E2E RNNT INT8 punctuation/case, CPU4, 
 - Queue retains a completion-only barrier while the caller owns its typed result/error/cancellation. This fixes generic result retention; ordinary memory dictation already enqueues Cancel in finally, so a persistent ordinary-idle audio leak is not established.
 - Disabled sounds do not preload cue players/buffers during startup or settings refresh; explicit preview still creates its cue on demand.
 
-Three deterministic regression cases failed on previous source. Updated Full1153 pass; Compact1146 pass with seven expected Full-only skips. Independent read-only review and exact final-payload native memory/file checks remain before delivery.
+Three deterministic regression cases failed on previous source. Updated Full1153 pass; Compact1146 pass with seven expected Full-only skips. Independent review accepted. Final exact-payload native16old/new output pairs and actualinstalledCLI pass; source-bound PCM unchanged/boundschecked.
 
 ## Rejected experiments
 
@@ -19,9 +19,10 @@ Headless paired recognizers on the published 2.4.1 native stack, same pinned pub
 
 Root verified immutable nine-file Windows and65-file native audit manifests. Experiments use guards, exact models/native pins and public PCM; no user audio or device recording. [Evidence](../../artifacts/quality-2.4.2/resources/experiments-v1/manifest.json).
 
-## Remaining delivery gates
+## Final delivery
 
-1. Source-bound real-native memory/file parity including long sliced input, no PCM mutation; review any findings.
-2. Commit source, Windows CI, clean source-bound self-contained package and independent hash/model/runtime checks.
-3. Transactional installed update retaining settings/default microphone/pause/Data, actual installed public-audio CLI and finite idle CPU/RAM/GPU sample.
-4. Publish verified 2.4.2 tag/assets, preserve2.4.1, complete measured report and neutral feedback board. No personal accuracy or whole-app RAM savings percentage without measurement.
+All required engineering gates complete: finalCI1153/tree match, payload/installed545hashes, unchanged8models, liveCAPI/ORT, source/tag8ac, published/latest402009744/eightassets verified, previous2.4.1unchanged. Actualinstalledbothenginesready/defaultmic/pause+13properties retained. Dynamic capsule/history metadata comparison was invalidated by normal app/user activity; private history/audio unread, updater does not replaceHistory. Transaction committed once; final readback passes.
+
+Idle observation20snapshots/45.23s CPU16avg0.0108%,WS1.135GB/private1.147GB,GPU0%observed/ded15.92MB. ConstantRAM savings, personal acousticgain and universal speed gain notestablished. Shortmanaged allocation783536→42052B in bothcompletedorders. AdditionalABBA safely stopped by globalheadroom. CleanVM/real-driver endurance remain unverified. [Release](../releases/2.4.2.md), [evaluation](../models/EVALUATION-2.4.2.md), [neutral board](../../artifacts/quality-2.4.2/resources/review.html).
+
+Root removed only owned unaccepted firstbuild/inner installer552files1732125260logicalB; currentweights/accepted evidence retained. Physicaldiskdelta unmeasured. No required install/release action remains.

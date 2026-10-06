@@ -1,0 +1,9 @@
+# Current-model resource2.4.2 published and installed
+
+Owner-authorized engineering resource maintenance delivered under EV-2234. Source/tag8ac; PR4/WindowsCI37035534178/job1109326877781153pass. Final Full1153/Compact1146+7 pass; native16old/new publicmemory/file parity/PCMboundaries and actualinstalledCLI pass. Models/CPU4/arena/DSP/precapture/tail unchanged. Removed shortPCMcopy, duplicate Resultmarshaling, generic queue typedresult ownership and disabledcue preload.
+
+Actual installed PID30896/bothready/545hashes/defaultmic/pause+13properties/liveCAPI/ORT verified. ManagedGitmetadata changes,450method signatures/IL unchanged. Dynamic capsule/history metadata invalidates idle-preservation comparison; no private audio/historypayload read and updater excludesHistory. Outerstrict postchecks rejected normalactivity; committed upgrade not repeated, final readbackpasses.
+
+Payload545files841185982B/.NET8.0.30/manifest2465e321...; installer445419353B/SHA02db4924.../NotSigned. Publicrelease402009744/v2.4.2/latest/all8assets verifiedanonymous;2.4.1tag/assets unchanged. Actualinstalled20snapshots45.23s CPU16avg0.0108%,maxinterval0.1943%,WS1.135GB/private1.147GB,GPU0%observed/ded15.92MB. No constantRAM/universal speed/personal acoustic gain. Shortmanaged783536to42052B in bothorders; arenaoff/2threads rejected. AdditionalABBA stoppedglobalheadroom; initialcachemisboundharness excluded.
+
+Cleanup onlyroot-owned unaccepted firstbuild/inner:552files1732125260logicalB;acceptedweights/releases/source/reports retained;physicaldelta notmeasured. Report/neutralboard/resources and releaseqa retained in artifacts/quality-2.4.2. DocsSTATUS/KICKOFF/CONTEXT/ROADMAP/APP_MAP/README/ticket/release and exactpublicevaluation updated. Existingarchitecture2.4.2ownership remainscorrect. Historyindex regenerated. No required operation remains; optionalpersonal acoustic/realdriver/cleanVM evidence is outside provenclaims. DNS and unrelatedprojects unchanged.

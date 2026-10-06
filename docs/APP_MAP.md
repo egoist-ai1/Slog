@@ -1,6 +1,6 @@
 # Egoist Voice — application map
 
-## Russian Compact 2.4.1 quality profile
+## Russian Compact 2.4.2 quality profile
 
 Warm WASAPI pre-roll 320 ms → complete session + release tail 350 ms → 16 kHz mono PCM → quiet-session acceptance without cropping → plain GigaAM v3 RNNT INT8 words → GigaAM v3 E2E RNNT INT8 on the same PCM → bounded punctuation/case projection → audio-confirmed known names → literal text rules → safe delivery. Both native engines use four CPU threads and greedy decoding; one user-facing profile. Disabling audio formatting retains the exact primary result. Capsule cadence remains 60 Hz (10 Hz reduced motion).
 
@@ -59,3 +59,7 @@ Bounded text repairs support catalogue-backed Russian-name/preposition joins and
 
 - idle/listening/processing/success/error/cancelled, model cold/ready/unloaded, translator verified/unavailable, delivery inserted/suppressed.
 - Single-instance mutex, hook watchdog, GPU/CPU fallback and installer upgrade/uninstall lifecycle are durable reliability contracts.
+
+## Resource maintenance 2.4.2
+
+Published/installed source8ac retains the same profile/native weights. Short complete-array memory reuse avoids copy; partial/offsets remain bounded copies. Result marshals once; capture queue keeps completion-only barrier; disabled cue preload omitted. Full/CI1153,Compact1146+7,native16paritypairs and installed545hashes pass. ActualidleCPUavg0.0108%,resident1.135GB; no permanentRAM/personal acoustic/universal speed gain. [Evaluation](models/EVALUATION-2.4.2.md).

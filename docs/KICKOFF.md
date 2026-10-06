@@ -2,7 +2,7 @@
 
 ## Current route — 2026-10-02
 
-Start with STATUS → EV-2234 → docs/releases/2.4.2.md. Candidate2.4.2 removes bounded allocations while preserving current models/CPU4/arena. Complete source-bound native checks, Windows CI, packaging, transactional installation, measurements and publication under existing authorization. Installed/public2.4.1 and prior accepted evidence remain unchanged. Historical2.2 instructions below do not define this task.
+Start with STATUS → EV-2234 → docs/releases/2.4.2.md and docs/models/EVALUATION-2.4.2.md. Published/installed2.4.2 keeps currentGigaAM pair/CPU4/arena and removes bounded allocations. Engineering gates complete; personal acoustic, universal speed/constantRAM savings and cleanVM/endurance remain unproven. Preserve source/tag8ac, prior2.4.1/evidence and privateData. Do not redo accepted builds/inference/install/publication without new cause. Historical2.2 instructions below do not define this task.
 
 Дата подготовки: `2026-08-02T16:37:11Z`.
 

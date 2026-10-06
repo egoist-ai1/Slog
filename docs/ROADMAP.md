@@ -2,9 +2,9 @@
 
 ## Current release — 2026-10-02
 
-EV-2233 / [2.4.1](https://github.com/egoist-ai1/EgoistVoice/releases/tag/v2.4.1) is published and installed. Current GigaAMv3 pair retained; Windows/default-mic/background/animation/settings and bounded text changes delivered. Full/CI1150, Compact1143+7, exact finalUI and545installedhashes pass; both engines ready. Cleanup63.55GB logical bytes accepted. [Acceptance](tickets/EV-2233-gigaam-windows-tuning.md), [resource evaluation](models/EVALUATION-2.4.1.md).
+EV-2234 / [2.4.2](https://github.com/egoist-ai1/EgoistVoice/releases/tag/v2.4.2) is published/installed, source8ac. Current GigaAM/CPU4/arena retained; short PCM copy, repeated Result marshal, generic queue result retention and disabled-cue preload removed. Full/CI1153,Compact1146+7,native16parity pairs/all545installedhashes/bothready/defaultmic/pause+13choices pass. [Acceptance](tickets/EV-2234-current-model-resource-minimization.md), [evaluation](models/EVALUATION-2.4.2.md).
 
-Actual idle44.51s: CPUaverage0.0088%,residentRAM918MB/private843MB,GPUmaxengine0%,dedicated12.31MB. Cold publicCLI peakRAM1.112GB; median2.371s includes startup/load/decode/exit. Do not infer universal resource/speed gains or warm latency. Desired5–10% acoustic improvement remains unproven; earlier50% search superseded, not achieved. Future quality work requires fresh predetermined human control; personal examples need original audio. Long real-driver endurance and cleanWindows installer lifecycle remain unverified.
+Actual20snapshots/45.23s:CPUavg0.0108%,resident1.135GB/private1.147GB,GPU0%observed/ded15.92MB. Shortmanaged783536→42052B; permanentRAM and universal speed gains notestablished. Arena-off/2threads rejected for latency; private acousticgain5–10%, realdrivers/endurance and cleanVM remain unverified. Previous2.4.1/source66f79ad inherited Windows/text/UI work and cleanup remain immutable. New owned firstbuild cleanup552files/1.732GB logicalbytes; no physicaldisk claim.
 
 ## Previous quality release — 2026-10-02
 
