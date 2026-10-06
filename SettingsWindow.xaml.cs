@@ -338,6 +338,7 @@ public partial class SettingsWindow : Window
             MixedLanguageCheck.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
             NumbersCheck.IsChecked = settings.ApplyNumberNormalization;
             VoiceCommandsCheck.IsChecked = settings.ApplyVoiceCommands;
+            AutostartCheck.IsChecked = AutostartService.IsEnabled();
             RestoreClipboardCheck.IsChecked = settings.RestoreClipboard;
             SoundCheck.IsChecked = settings.SoundFeedback;
             SoundVolumeSlider.Value = settings.SoundVolume;
@@ -587,6 +588,20 @@ public partial class SettingsWindow : Window
     }
 
     private void GeneralSetting_OnChanged(object sender, RoutedEventArgs e) => SaveGeneralSettings();
+
+    private void Autostart_OnChanged(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        var wanted = AutostartCheck.IsChecked == true;
+        var executable = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(executable) || !AutostartService.SetEnabled(wanted, executable))
+        {
+            // Registry refused the change: show the real state instead of a switch that lies.
+            _loading = true;
+            try { AutostartCheck.IsChecked = AutostartService.IsEnabled(); }
+            finally { _loading = false; }
+        }
+    }
 
     private void SoundVolumeSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {

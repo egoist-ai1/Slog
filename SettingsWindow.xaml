@@ -394,6 +394,9 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="Поведение приложения" Style="{StaticResource SectionTitle}" />
+                                    <CheckBox x:Name="AutostartCheck" Content="Запускать вместе с Windows"
+                                              Checked="Autostart_OnChanged" Unchecked="Autostart_OnChanged"
+                                              AutomationProperties.Name="Запускать вместе с Windows" />
                                     <CheckBox x:Name="RestoreClipboardCheck" Content="Возвращать содержимое буфера обмена"
                                               Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
                                     <CheckBox x:Name="NotificationsCheck" Content="Показывать только важные уведомления"
