@@ -9,11 +9,11 @@ namespace Egoist.Voice.Services;
 internal static class EgoistTrayPalette
 {
     internal static Color Background { get; private set; } = Color.FromArgb(5, 5, 5);
-    internal static Color Hover { get; private set; } = Color.FromArgb(58, 13, 18);
-    internal static Color HoverBorder { get; private set; } = Color.FromArgb(112, 24, 32);
+    internal static Color Hover { get; private set; } = Color.FromArgb(29, 40, 9);
+    internal static Color HoverBorder { get; private set; } = Color.FromArgb(92, 148, 0);
     internal static Color Primary { get; private set; } = Color.FromArgb(247, 247, 248);
     internal static Color Disabled { get; private set; } = Color.FromArgb(112, 112, 120);
-    internal static Color Accent { get; private set; } = Color.FromArgb(255, 38, 52);
+    internal static Color Accent { get; private set; } = Color.FromArgb(168, 255, 0);
     internal static Color Separator { get; private set; } = Color.FromArgb(42, 42, 48);
 
     internal static void Apply(EffectiveAppTheme theme)
@@ -33,21 +33,21 @@ internal static class EgoistTrayPalette
         if (theme == EffectiveAppTheme.Light)
         {
             Background = Color.FromArgb(246, 246, 248);
-            Hover = Color.FromArgb(255, 232, 235);
-            HoverBorder = Color.FromArgb(228, 106, 116);
+            Hover = Color.FromArgb(226, 242, 185);
+            HoverBorder = Color.FromArgb(120, 176, 0);
             Primary = Color.FromArgb(24, 24, 27);
             Disabled = Color.FromArgb(112, 113, 122);
-            Accent = Color.FromArgb(217, 25, 42);
+            Accent = Color.FromArgb(74, 130, 0);
             Separator = Color.FromArgb(207, 207, 215);
             return;
         }
 
         Background = Color.FromArgb(5, 5, 5);
-        Hover = Color.FromArgb(58, 13, 18);
-        HoverBorder = Color.FromArgb(112, 24, 32);
+        Hover = Color.FromArgb(29, 40, 9);
+        HoverBorder = Color.FromArgb(92, 148, 0);
         Primary = Color.FromArgb(247, 247, 248);
         Disabled = Color.FromArgb(112, 112, 120);
-        Accent = Color.FromArgb(255, 38, 52);
+        Accent = Color.FromArgb(168, 255, 0);
         Separator = Color.FromArgb(42, 42, 48);
     }
 }

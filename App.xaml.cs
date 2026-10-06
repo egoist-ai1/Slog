@@ -49,6 +49,12 @@ public partial class App : System.Windows.Application
             RequestShutdown();
             return;
         }
+        if (e.Args.Length == 2 && e.Args[0] == "--export-whisper-models")
+        {
+            File.WriteAllText(e.Args[1], System.Text.Json.JsonSerializer.Serialize(ModelCatalog.CreateWhisperRussianModels()));
+            RequestShutdown();
+            return;
+        }
         if (e.Args.Length == 2 && e.Args[0] == "--export-compact-models")
         {
             File.WriteAllText(e.Args[1], System.Text.Json.JsonSerializer.Serialize(ModelCatalog.CreateCompactModels()));

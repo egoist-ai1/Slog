@@ -14,8 +14,8 @@
   #define AppTitle "Egoist Voice"
   #define PackageName "EgoistVoice-Setup-Russian-" + AppVersion + "-win-x64-inner"
 #else
-  #define AppTitle "Egoist Voice Compact"
-  #define PackageName "EgoistVoice-Setup-Compact-RU-" + AppVersion + "-win-x64"
+  #define AppTitle "Молви"
+  #define PackageName "Molvi-Setup-" + AppVersion + "-win-x64"
 #endif
 #define AppExe "Egoist.Voice.exe"
 
@@ -26,7 +26,7 @@ AppVersion={#AppVersion}
 AppVerName={#AppTitle} {#AppVersion}
 AppPublisher=EGOIST
 DefaultDirName={localappdata}\Programs\Egoist Voice Compact
-DefaultGroupName=Egoist Voice Compact
+DefaultGroupName=Молви
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
@@ -61,7 +61,7 @@ RestartApplications=no
 UninstallLogMode=append
 VersionInfoVersion={#AppFileVersion}
 VersionInfoCompany=EGOIST
-VersionInfoDescription=Egoist Voice - offline Russian dictation
+VersionInfoDescription=Молви — офлайн-диктовка на русском
 VersionInfoProductName={#AppTitle}
 VersionInfoProductVersion={#AppFileVersion}
 VersionInfoProductTextVersion={#AppVersion}
@@ -82,13 +82,15 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "EgoistVoice"; Flags: deletevalue; Check: not ShouldAutoStart
 
 [InstallDelete]
+Type: files; Name: "{autoprograms}\Egoist Voice Compact.lnk"
+Type: files; Name: "{userdesktop}\Egoist Voice Compact.lnk"
 Type: files; Name: "{userdesktop}\{#AppTitle}.lnk"; Check: not ShouldCreateDesktopIcon
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppTitle}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
 
 [Messages]
-SelectDirLabel3=Выберите папку для Egoist Voice.
+SelectDirLabel3=Выберите папку для Молви.
 ApplicationsFound=Завершите диктовку. Чтобы обновить файлы, установщик закроет приложения из списка.
 ApplicationsFound2=Завершите диктовку. Чтобы обновить файлы, установщик закроет приложения из списка.
 
@@ -98,7 +100,7 @@ const
   SurfaceColor = $001A1616;
   PrimaryTextColor = $00FAFAFA;
   SecondaryTextColor = $00ADA5A5;
-  AccentColor = $004824FF;
+  AccentColor = $0000FFA8;
   TrackColor = $00332B2B;
 
 var
@@ -242,7 +244,7 @@ procedure CreateBrandShell;
 var
   Dark: Integer;
 begin
-  WizardForm.Caption := 'Egoist Voice — установка';
+  WizardForm.Caption := 'Молви — установка';
   WizardForm.ClientWidth := ScaleX(580);
   WizardForm.ClientHeight := ScaleY(452);
   WizardForm.Color := BackgroundColor;
@@ -270,7 +272,7 @@ begin
   HeaderIcon.Stretch := True;
   HeaderIcon.Bitmap.LoadFromFile(ExpandConstant('{tmp}\installer-microphone-52.bmp'));
   SetBounds(HeaderIcon, 28, 24, 40, 40);
-  ProductLabel := NewLabel(82, 23, 330, 28, 17, 'Egoist Voice', PrimaryTextColor, True);
+  ProductLabel := NewLabel(82, 23, 330, 28, 17, 'Молви', PrimaryTextColor, True);
   VersionLabel := NewLabel(83, 53, 420, 20, 9, 'Установка · {#AppVersion}', SecondaryTextColor, False);
   StateLabel := NewLabel(28, 104, 524, 30, 16, '', PrimaryTextColor, True);
   DetailLabel := NewLabel(28, 144, 524, 44, 10, '', SecondaryTextColor, False);
@@ -426,7 +428,7 @@ begin
   else if CurPageID = wpFinished then
   begin
     StateLabel.Caption := 'Готово';
-    DetailLabel.Caption := 'Egoist Voice установлен.';
+    DetailLabel.Caption := 'Молви установлен.';
     SetBounds(WizardForm.RunList, 28, 212, 524, 70);
     WizardForm.RunList.Visible := not FinishedRestart;
     if FinishedRestart then
