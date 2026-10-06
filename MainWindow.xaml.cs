@@ -16,7 +16,7 @@ namespace Egoist.Voice;
 
 public partial class MainWindow : Window, IDisposable
 {
-    private static readonly SolidColorBrush ActiveDiscBrush = FrozenBrush("#A8FF00");
+    private static readonly SolidColorBrush ActiveDiscBrush = FrozenBrush("#12160A");
     private static readonly SolidColorBrush SuccessDiscBrush = FrozenBrush("#00000000");
     private static readonly SolidColorBrush CapsuleInkBrush = FrozenBrush("#000000");
     private static readonly SolidColorBrush CapsuleTextBrush = FrozenBrush("#FAFAFA");
@@ -24,7 +24,9 @@ public partial class MainWindow : Window, IDisposable
     private System.Windows.Media.Brush ActiveBorderBrush => CapsuleInkBrush;
     private SolidColorBrush SurfaceBrush => CapsuleInkBrush;
     private SolidColorBrush PrimaryTextBrush => CapsuleTextBrush;
-    private SolidColorBrush AccentBrush => ActiveDiscBrush;
+    private static readonly SolidColorBrush CapsuleMutedBrush = FrozenBrush("#9A9AA2");
+    private static readonly SolidColorBrush LimeBrush = FrozenBrush("#A8FF00");
+    private SolidColorBrush AccentBrush => LimeBrush;
     private SolidColorBrush ErrorBrush => ActiveDiscBrush;
     private System.Windows.Media.Brush ErrorBorderBrush => CapsuleInkBrush;
     private SolidColorBrush ProgressTrackBrush => ThemeBrush("AppMeterTrackBrush");

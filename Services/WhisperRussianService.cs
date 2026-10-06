@@ -117,7 +117,17 @@ public sealed class WhisperRussianService : ITranscriptionEngine, ISampleTranscr
             .ConfigureAwait(false);
         progress?.Report(new ModelProgress("Запускаю модель…", 100));
         var clock = Stopwatch.StartNew();
-        var factory = await Task.Run(() => WhisperFactory.FromPath(path), cancellationToken).ConfigureAwait(false);
+        // Flash attention cuts the decode by about a third and lowers committed memory, with identical text
+        // on the owner's corpus; fall back to the plain graph if a driver refuses it.
+        var factory = await Task.Run(() =>
+        {
+            try { return WhisperFactory.FromPath(path, new WhisperFactoryOptions { UseFlashAttention = true }); }
+            catch (Exception exception)
+            {
+                AppLog.Write("Whisper flash attention unavailable; using the standard graph", exception);
+                return WhisperFactory.FromPath(path);
+            }
+        }, cancellationToken).ConfigureAwait(false);
         // A short pass compiles the GPU pipelines; without it the first real dictation pays seconds.
         await Task.Run(async () =>
         {

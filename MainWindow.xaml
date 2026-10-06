@@ -381,7 +381,7 @@
                             <Ellipse x:Name="StateHalo" Visibility="Collapsed" IsHitTestVisible="False">
                                 <Ellipse.RenderTransform><ScaleTransform x:Name="StateHaloScale" /></Ellipse.RenderTransform>
                             </Ellipse>
-                            <Border x:Name="StateDisc" Margin="0" CornerRadius="16" Background="Transparent"
+                            <Border x:Name="StateDisc" Margin="0" CornerRadius="16" Background="Transparent" BorderBrush="#59A8FF00" BorderThickness="1"
                                     RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
                                     <TransformGroup>

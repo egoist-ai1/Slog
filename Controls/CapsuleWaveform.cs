@@ -73,8 +73,8 @@ public sealed class CapsuleWaveform : FrameworkElement
         CapsuleWaveformProfile.BarHeight);
 
     private static readonly Brush FrontBrush = CreateRibbonBrush(1.0);
-    private static readonly Brush MidBrush = CreateRibbonBrush(0.5);
-    private static readonly Brush BackBrush = CreateRibbonBrush(0.22);
+    private static readonly Brush MidBrush = CreateRibbonBrush(0.34);
+    private static readonly Brush BackBrush = CreateRibbonBrush(0.13);
     private static readonly Pen CrestPen = CreateCrestPen();
     private double _drift;
 
@@ -93,7 +93,7 @@ public sealed class CapsuleWaveform : FrameworkElement
 
     private static Pen CreateCrestPen()
     {
-        var pen = new Pen(new SolidColorBrush(System.Windows.Media.Color.FromArgb(235, 236, 255, 170)), 1) { LineJoin = PenLineJoin.Round };
+        var pen = new Pen(new SolidColorBrush(System.Windows.Media.Color.FromArgb(210, 232, 255, 150)), 0.9) { LineJoin = PenLineJoin.Round };
         pen.Freeze();
         return pen;
     }
@@ -110,7 +110,7 @@ public sealed class CapsuleWaveform : FrameworkElement
         // Three layers of one ribbon: a wide soft echo, a body, and a bright crest. The layers
         // follow the same spectrum with a small phase lag, which is what reads as a flowing wave.
         DrawRibbon(drawingContext, BackBrush, null, 1.0, lag: 2.0);
-        DrawRibbon(drawingContext, MidBrush, null, 0.88, lag: 1.0);
+        DrawRibbon(drawingContext, MidBrush, null, 0.86, lag: 1.0);
         DrawRibbon(drawingContext, FrontBrush, CrestPen, 0.7, lag: 0);
     }
 
@@ -124,7 +124,7 @@ public sealed class CapsuleWaveform : FrameworkElement
         for (var i = -1; i <= count; i++)
         {
             var index = Math.Clamp(i, 0, count - 1);
-            var ripple = 1 + 0.12 * Math.Sin(_drift * 3 + index * 0.8 + lag);
+            var ripple = 1 + 0.035 * Math.Sin(_drift * 2 + index * 0.6 + lag);
             var half = Math.Max(1, _drawnLevels[index] * scale * ripple * ActualHeight / 2);
             var edge = i < 0 || i >= count ? 0.2 : 1;
             var x = cell * (i + 0.5);

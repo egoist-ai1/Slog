@@ -16,7 +16,7 @@ internal static class CapsuleWaveformProfile
 
     internal static double SmoothLevel(double current, double target, double deltaSeconds)
     {
-        var timeConstant = target > current ? 0.008 : 0.080;
+        var timeConstant = target > current ? 0.010 : 0.115;
         var alpha = 1 - Math.Exp(-Math.Clamp(deltaSeconds, 1d / 240d, 0.05) / timeConstant);
         return current + (target - current) * alpha;
     }

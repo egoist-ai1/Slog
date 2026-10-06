@@ -562,10 +562,9 @@ public partial class MainWindow
             };
             DetailText.Foreground = PrimaryTextBrush;
             ProcessingLabel.Foreground = PrimaryTextBrush;
-            SetMicStroke(_lastVisualStateKind is CapsuleVisualStateKind.Listening or CapsuleVisualStateKind.Recognizing
-                ? CapsuleInkBrush : AccentBrush);
-            RecordingTimer.Foreground = PrimaryTextBrush;
-            CloseButton.Foreground = PrimaryTextBrush;
+            SetMicStroke(AccentBrush);
+            RecordingTimer.Foreground = CapsuleMutedBrush;
+            CloseButton.Foreground = CapsuleMutedBrush;
             SetStroke(CheckIcon, AccentBrush);
             ClipboardIcon.Foreground = PrimaryTextBrush;
             DownloadIcon.Foreground = AccentBrush;
