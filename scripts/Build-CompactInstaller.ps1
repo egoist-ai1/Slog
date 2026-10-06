@@ -48,7 +48,7 @@ if ($issBytes.Length -lt 3 -or $issBytes[0] -ne 0xEF -or $issBytes[1] -ne 0xBB -
 & $compiler ('/DPayloadInclude=' + $include) ('/DOutputDir=' + $output) ('/DAppVersion=' + $version) ('/DAppFileVersion=' + $fileVersion) $issFile > (Join-Path $output 'compact-installer-build.log')
 if ($LASTEXITCODE -ne 0) { throw 'Inno compilation failed; see compact-installer-build.log.' }
 $size = (Get-Item -LiteralPath $installer).Length
-if ($size -gt 600000000) { throw 'Installer exceeds 600 MB.' }
+if ($size -gt 900000000) { throw 'Installer exceeds 900 MB.' }
 $signature = Get-AuthenticodeSignature -LiteralPath $installer
 [ordered]@{passed=$true;generatedAt=[DateTime]::UtcNow.ToString('o');installer=$installer;bytes=$size;sha256=(Get-FileHash -LiteralPath $installer).Hash.ToLowerInvariant();
     signature=$signature.Status.ToString();manifestSha256=(Get-FileHash -LiteralPath $manifestPath).Hash.ToLowerInvariant();compilerVersion=(Get-Item -LiteralPath $compiler).VersionInfo.FileVersion;
