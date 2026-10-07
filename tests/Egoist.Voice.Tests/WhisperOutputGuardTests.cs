@@ -41,3 +41,29 @@ public class MisheardModelNameTests
         Assert.Contains(expected, text);
     }
 }
+
+public class EgoistProductNameTests
+{
+    [Theory]
+    [InlineData("открой эгоист геймс и проверь", "Egoist Games")]
+    [InlineData("запусти эгоист лаг", "Egoist Lag")]
+    [InlineData("в эгоист шилд есть обновление", "Egoist Shield")]
+    [InlineData("зайди в эгоист аккаунт", "Egoist Account")]
+    [InlineData("эгоист аккаунт менеджер обновился", "Egoist Account Manager")]
+    [InlineData("эгоист релей не отвечает", "Egoist Relay")]
+    [InlineData("написали в егоист лагом", "Egoist Lagom")]
+    public void Spoken_egoist_products_get_the_brand_spelling(string spoken, string expected)
+    {
+        var text = new Egoist.Voice.Core.TranscriptPostProcessor(Egoist.Voice.Core.UserDictionary.BuiltIn,
+            new Egoist.Voice.Core.PostProcessingOptions(ApplyNumberNormalization: true)).Process(spoken);
+        Assert.Contains(expected, text);
+    }
+
+    [Fact]
+    public void The_plain_russian_word_is_left_alone()
+    {
+        var text = new Egoist.Voice.Core.TranscriptPostProcessor(Egoist.Voice.Core.UserDictionary.BuiltIn,
+            new Egoist.Voice.Core.PostProcessingOptions(ApplyNumberNormalization: true)).Process("он такой эгоист, совсем не думает о других");
+        Assert.DoesNotContain("Egoist", text);
+    }
+}
