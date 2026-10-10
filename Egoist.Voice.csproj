@@ -25,9 +25,9 @@
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
     <AssemblyName>Egoist.Voice</AssemblyName>
     <RootNamespace>Egoist.Voice</RootNamespace>
-    <Version>3.1.1</Version>
-    <AssemblyVersion>3.1.1.0</AssemblyVersion>
-    <FileVersion>3.1.1.0</FileVersion>
+    <Version>3.2.0</Version>
+    <AssemblyVersion>3.2.0.0</AssemblyVersion>
+    <FileVersion>3.2.0.0</FileVersion>
     <Company>EGOIST</Company>
     <Product>Egoist Voice</Product>
     <Description>Быстрая локальная русская диктовка для Windows</Description>
@@ -41,9 +41,9 @@
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.4" ExcludeAssets="runtime;native" />
     <PackageReference Include="Whisper.net" Version="1.9.1" />
-    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
     <PackageReference Include="Whisper.net.Runtime.Cuda" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
-    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime.Vulkan" Version="1.9.1" Condition="'$(VoiceFlavor)' != 'Compact'" />
   </ItemGroup>
 
   <ItemGroup>

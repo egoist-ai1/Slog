@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [string]$OutputDirectory = '',
-    [string]$InstalledModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\models-whisper\Models'),
+    [string]$InstalledModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\Russian-2.4.2-resource-verified\portable\Models'),
     [switch]$UseExistingPublish,
     [string]$WorkDirectory = ''
 )
@@ -27,7 +27,7 @@ $executable = Join-Path $destination 'Egoist.Voice.exe'
 if (!(Test-Path -LiteralPath $executable) -or !(Test-Path -LiteralPath (Join-Path $destination 'coreclr.dll'))) {
     throw 'Expected self-contained publish is missing.'
 }
-if (Get-ChildItem -LiteralPath $destination -Recurse -File | Where-Object { $_.Name -match '^(cublas|cudart|cudnn|ggml-cuda)' }) {
+if (Get-ChildItem -LiteralPath $destination -Recurse -File | Where-Object { $_.Name -match '^(cublas|cudart|ggml-cuda|whisper\.dll)' }) {
     throw 'Non-compact runtime detected.'
 }
 $manifestPath = Join-Path $destination 'compact-models.json'
@@ -37,7 +37,7 @@ try {
     $diagnosticRoot = if ($WorkDirectory) { [IO.Path]::GetFullPath($WorkDirectory) } else { Join-Path (Split-Path -Parent $destination) 'build-diagnostics' }
     $env:EGOIST_VOICE_DATA_ROOT = Join-Path $diagnosticRoot 'data'
     $env:EGOISTVOICE_LOG_DIRECTORY = Join-Path $diagnosticRoot 'logs'
-    $process = Start-Process -FilePath $executable -ArgumentList @('--export-whisper-models', ('"' + $manifestPath + '"')) -WindowStyle Hidden -PassThru
+    $process = Start-Process -FilePath $executable -ArgumentList @('--export-russian-quality-models', ('"' + $manifestPath + '"')) -WindowStyle Hidden -PassThru
     if (!$process.WaitForExit(30000)) { $process.Kill(); throw 'Model manifest export timed out.' }
     if ($process.ExitCode -ne 0) { throw 'Model manifest export failed.' }
 } finally {
@@ -45,12 +45,13 @@ try {
     $env:EGOISTVOICE_LOG_DIRECTORY = $priorLogRoot
 }
 $models = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-if (@($models).Count -ne 1 -or $models[0].Id -ne 'whisper-large-v3-turbo-q5_0-v1' -or $models[0].SizeBytes -ne 574041195 -or
-    $models[0].Sha256 -ne '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2') {
-    throw 'Slog requires exactly the pinned Whisper large-v3-turbo q5_0 asset (574041195 bytes).'
+if (@($models).Count -ne 8 -or @($models.Id | Sort-Object -Unique).Count -ne 8 -or ($models | Measure-Object SizeBytes -Sum).Sum -ne 650090519 -or
+    @($models | Where-Object Id -Match '^gigaam-v3-e2e-rnnt-').Count -ne 4 -or
+    @($models | Where-Object Id -Match '^gigaam-v3-rnnt-').Count -ne 4) {
+    throw 'Russian quality requires eight primary and formatting RNNT assets totaling 650090519 bytes.'
 }
 foreach ($model in $models) {
-    if ($model.Id -notmatch '^whisper-[a-z0-9_-]+$' -or $model.FileName -notmatch '^[a-zA-Z0-9_.-]+$') { throw 'Invalid catalog path.' }
+    if ($model.Id -notmatch '^gigaam-[a-z0-9-]+$' -or $model.FileName -notmatch '^[a-zA-Z0-9_.-]+$') { throw 'Invalid catalog path.' }
     $relative = Join-Path 'Speech' (Join-Path $model.Id $model.FileName)
     $source = Join-Path $InstalledModelsRoot $relative
     if (!(Test-Path -LiteralPath $source)) { throw "Build model missing: $($model.Id). No downloads will be attempted." }
@@ -70,24 +71,30 @@ if (Test-Path -LiteralPath $licenseSource -PathType Container) {
     Get-ChildItem -LiteralPath $licenseSource -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $licenseDestination }
 } else {
     New-Item -ItemType Directory -Path $licenseDestination -Force | Out-Null
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\models\Whisper-LICENSE.txt') -Destination (Join-Path $licenseDestination 'Whisper-MIT-LICENSE.txt')
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs\models\GigaAM-LICENSE.txt') -Destination (Join-Path $licenseDestination 'GigaAM-MIT-LICENSE.txt')
 }
-[IO.File]::WriteAllText((Join-Path $destination 'egoist-voice.portable'), 'whisper-large-v3-turbo-q5-ru-vulkan-v1')
+[IO.File]::WriteAllText((Join-Path $destination 'egoist-voice.portable'), 'gigaam-v3-rnnt-russian-quality-cpu-v4')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'LICENSE') -Destination $destination
 Copy-Item -LiteralPath (Join-Path $projectRoot 'THIRD-PARTY-NOTICES.md') -Destination $destination
 [IO.File]::WriteAllText((Join-Path $destination 'START-HERE.txt'), @'
 Слог — офлайн-диктовка на русском. Windows 10 (1903 и новее) / Windows 11, x64
 
 Запустите Egoist.Voice.exe из установленной или перенесённой целиком папки.
-.NET не нужен. Модель включена; сеть не требуется.
-Распознавание: Whisper large-v3-turbo (q5_0), русский язык, ускорение на видеокарте через Vulkan.
-Без видеокарты работает на процессоре, но заметно медленнее.
-Модель загружается в память на время диктовки и выгружается через минуту простоя.
+.NET и отдельная видеокарта не нужны. Модели уже включены; сеть не требуется.
 Удерживайте настроенную кнопку мыши или выберите сочетание клавиш в меню трея.
-Эта кнопка мыши не передаётся другим программам.
-Настройки и журнал пишутся в Data рядом с приложением.
-Ошибки распознавания возможны. Перевод и дополнительная текстовая модель не входят.
+Настройки и журнал пишутся в Data рядом с приложением. История 3 последних записей включается отдельно в настройках; ваш выбор сохраняется при обновлении.
+Переносите всю папку. Перед переносом закройте приложение.
 
+Состав: русский профиль GigaAM v3 (Слог 3.2), CPU, 8 модельных файлов. Модель всегда готова в памяти, загрузки перед диктовкой нет.
+Plain RNNT INT8 считывает слова; E2E RNNT INT8 определяет пунктуацию и регистр по аудио.
+Оформление по голосу включено по умолчанию. Явный выбор выключить его сохраняется при обновлении.
+Профиль осторожно уточняет известные английские названия при подтверждении аудиораспознавателем.
+Ошибки распознавания возможны. Дополнительная текстовая модель и перефразирование не нужны.
+Whisper и переводчик не входят.
+«Текст» позволяет распознать аудиофайл и скопировать результат.
+«История» позволяет слушать, удалять и повторно распознавать три последние записи.
+
+Закройте установленный Слог перед запуском другой копии: они используют один hotkey.
 Это неподписанная локальная сборка. На другом устройстве проверьте выбранный микрофон и клавишу активации.
 '@)
 $files = @(Get-ChildItem -LiteralPath $destination -File -Recurse | Sort-Object FullName | ForEach-Object {

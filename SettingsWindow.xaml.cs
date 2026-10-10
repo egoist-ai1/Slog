@@ -329,7 +329,7 @@ public partial class SettingsWindow : Window
             DirectFastModeCheck.IsChecked = settings.DirectGigaamFastMode;
             DirectFastModeCheck.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
             DirectFastModeHint.Text = VoiceRuntimeProfile.IsPortable
-                ? "Русская речь распознаётся локально моделью Whisper: пунктуация и английские названия ставятся сразу. Модель выгружается из памяти через минуту простоя."
+                ? "Русская речь распознаётся локально моделью GigaAM v3 со словарём: пунктуация и регистр определяются по голосу. Модель всегда готова в памяти, ожидания перед записью нет."
                 : "GigaAM распознаёт русскую речь. Дополнительная сверка Whisper может помочь смешанной речи, но увеличивает ожидание.";
             MixedLanguageCheck.IsChecked = settings.MixedLanguageMode && !VoiceRuntimeProfile.IsPortable;
             MixedLanguageCheck.IsEnabled = !VoiceRuntimeProfile.IsPortable && !settings.PreserveSpokenWords;
@@ -986,7 +986,7 @@ public partial class SettingsWindow : Window
         var presentation = ModelProgressFormatter.ControlCenter(allModelsReady, progress);
         RecognitionModelStatusText.Text = presentation.StatusText;
         if (VoiceRuntimeProfile.IsPortable && allModelsReady)
-            RecognitionModelStatusText.Text = "Whisper large-v3-turbo · русский · видеокарта (Vulkan) · готово без сети";
+            RecognitionModelStatusText.Text = "GigaAM v3 · русский · словарь · готово без сети";
         if (VoiceRuntimeProfile.IsPortable && _mainWindow.IsSpeechFormattingUnavailable)
             RecognitionModelStatusText.Text = "Речь готова · оформление недоступно";
         RecognitionModelStatusText.Foreground = presentation.IsFailure ? LoudBrush : MutedBrush;
