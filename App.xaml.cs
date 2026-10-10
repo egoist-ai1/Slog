@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using System.IO;
 using System.Net.Http;
 using System.Diagnostics;
@@ -25,6 +25,7 @@ public partial class App : System.Windows.Application
     private Task<IAudioCaptureService>? _captureConstructionTask;
     private Task? _shutdownTask;
     private bool _shutdownRequested;
+    private IDisposable? _startupFailureTray;
     private IModelManager? _startupModelManager;
     private RecentRecordingHistoryService? _startupRecentRecordings;
 
@@ -298,15 +299,22 @@ public partial class App : System.Windows.Application
         var recentRecordings = new RecentRecordingHistoryService();
         _startupRecentRecordings = recentRecordings;
         ShutdownMode = ShutdownMode.OnExplicitShutdown;
-        _captureConstructionTask = CreateCaptureForStartupAsync(() => new AudioCaptureService(
-            captureDeviceId: settings.CaptureDeviceId,
-            startPaused: settings.IsCapturePaused || isolatedVisualPreview));
+        using var startupTray = new StartupTrayStatus();
+        _captureConstructionTask = MicrophoneStartupRetry.CreateAsync(
+            () => CreateCaptureForStartupAsync(() => new AudioCaptureService(
+                captureDeviceId: settings.CaptureDeviceId,
+                startPaused: settings.IsCapturePaused || isolatedVisualPreview)),
+            retry => Dispatcher.BeginInvoke(() => startupTray.ShowWaiting(retry)),
+            wait: null,
+            CancellationToken.None);
         IAudioCaptureService capture;
         try { capture = await _captureConstructionTask; }
         catch (Exception exception)
         {
-            AppLog.Write("Microphone startup construction failed", exception);
-            RequestShutdown();
+            // Не закрываемся: аудио-служба может подняться позже. Иконка в трее остаётся с пунктом «Выход».
+            AppLog.Write("Microphone startup construction failed after retries", exception);
+            startupTray.ShowFailed(RequestShutdown);
+            _startupFailureTray = startupTray.Detach();
             return;
         }
         if (_shutdownRequested) return;
@@ -1308,6 +1316,7 @@ public partial class App : System.Windows.Application
         AppLog.Write($"Exit code={e.ApplicationExitCode}");
         _tray?.Dispose();
         (MainWindow as IDisposable)?.Dispose();
+        _startupFailureTray?.Dispose();
         _themeService?.Dispose();
         _shutdownRegistration?.Unregister(null);
         _shutdownEvent?.Dispose();

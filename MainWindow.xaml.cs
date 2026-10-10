@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -38,8 +39,6 @@ public partial class MainWindow : Window, IDisposable
     private Task _captureInitializationTask = Task.CompletedTask;
     private Task? _captureRefreshTask;
     private Task? _inventoryNotificationTask;
-    private Task? _captureStartTask;
-    private Task? _dictationTask;
     private Task? _captureCancelTask;
     private Task? _disposeTask;
     private bool _isStartingCapture;
@@ -68,13 +67,12 @@ public partial class MainWindow : Window, IDisposable
     private Task? _translationWarmupTask;
     private readonly PushToTalkCoordinator _pushToTalk = new();
     private Storyboard _exitStoryboard = null!;
+    private Storyboard _exitReducedStoryboard = null!;
     private GlobalHotkeyService? _hotkey;
     private KeyboardShortcut? _keyboardShortcut;
     private MousePushToTalkService? _mouseHotkey;
     private MouseSideButton? _mouseButton;
     private ActivationConfiguration _activationConfiguration = ActivationConfiguration.Default;
-    private CancellationTokenSource? _operationCancellation;
-    private nint _targetWindow;
     private DateTime _recordingStartedUtc;
     private double _wavePhase;
     private double _audioLevelCurrent;
@@ -87,7 +85,6 @@ public partial class MainWindow : Window, IDisposable
     private bool _hideRequested;
     private bool _forceHideAfterCancellation;
     private bool _isRecording;
-    private bool _isProcessing;
     private bool _announceModelDownloads;
     private bool _backgroundDownloadAnnounced;
     private bool _displayingBackgroundModelProgress;
@@ -144,6 +141,7 @@ public partial class MainWindow : Window, IDisposable
         _themeService = themeService;
         _sounds = new FeedbackSoundService(_audioCapture.SuppressFeedbackAudio);
         _exitStoryboard = (Storyboard)Resources["ExitStoryboard"];
+        _exitReducedStoryboard = (Storyboard)Resources["ExitReducedStoryboard"];
         _themeService.ThemeChanged += OnCapsuleThemeChanged;
         ApplyDictationSettings();
 
@@ -157,20 +155,8 @@ public partial class MainWindow : Window, IDisposable
         _pushToTalk.SetPaused(capturePreference.IsCapturePaused);
         _captureInitializationTask = InitializeCaptureSnapshotAsync();
         _modelManager.ProgressChanged += OnModelProgressChanged;
-        _exitStoryboard.Completed += (_, _) =>
-        {
-            if (CapsuleHidePolicy.CanComplete(
-                    _hideRequested,
-                    _isRecording,
-                    _isProcessing,
-                    _forceHideAfterCancellation))
-            {
-                _hideRequested = false;
-                _forceHideAfterCancellation = false;
-                _displayingBackgroundModelProgress = false;
-                Hide();
-            }
-        };
+        _exitStoryboard.Completed += OnExitStoryboardCompleted;
+        _exitReducedStoryboard.Completed += OnExitStoryboardCompleted;
         _hideTimer.Tick += (_, _) =>
         {
             _hideTimer.Stop();
@@ -224,8 +210,7 @@ public partial class MainWindow : Window, IDisposable
         _isCancellingCapture || !_captureInitializationTask.IsCompleted || _disposed;
 
     public bool CanStartRecording => !_disposed && !CurrentAudioCaptureState.IsUserPaused &&
-        !_isStartingCapture && !_isChangingCapture && !_isCancellingCapture && !_isRecording &&
-        !_isProcessing && _dictationTask is not { IsCompleted: false };
+        !_isStartingCapture && !_isChangingCapture && !_isCancellingCapture && !_isRecording;
 
     public IReadOnlyList<MicrophoneDeviceInfo> CaptureDevices => _captureDevices;
 
@@ -524,48 +509,49 @@ public partial class MainWindow : Window, IDisposable
         }
     }
 
-    private void OnHotkeyPressed(object? sender, EventArgs args)
+    private void OnHotkeyPressed(object? sender, PushToTalkEventArgs args)
     {
         if (_activationCaptureActive)
         {
             return;
         }
-        BeginPushToTalk(PushToTalkSource.Keyboard);
+        BeginPushToTalk(PushToTalkSource.Keyboard, args.PressTimestamp);
     }
 
-    private async void OnHotkeyReleased(object? sender, EventArgs args)
+    private async void OnHotkeyReleased(object? sender, PushToTalkEventArgs args)
     {
         if (_activationCaptureActive)
         {
             return;
         }
-        await EndPushToTalkAsync(PushToTalkSource.Keyboard);
+        await EndPushToTalkAsync(PushToTalkSource.Keyboard, args.ReleaseTimestamp);
     }
 
-    private void OnMouseHotkeyPressed(object? sender, EventArgs args)
+    private void OnMouseHotkeyPressed(object? sender, PushToTalkEventArgs args)
     {
         if (_activationCaptureActive)
         {
             return;
         }
-        BeginPushToTalk(PushToTalkSource.Mouse);
+        BeginPushToTalk(PushToTalkSource.Mouse, args.PressTimestamp);
     }
 
-    private async void OnMouseHotkeyReleased(object? sender, EventArgs args)
+    private async void OnMouseHotkeyReleased(object? sender, PushToTalkEventArgs args)
     {
         if (_activationCaptureActive)
         {
             return;
         }
-        await EndPushToTalkAsync(PushToTalkSource.Mouse);
+        await EndPushToTalkAsync(PushToTalkSource.Mouse, args.ReleaseTimestamp);
     }
 
-    private void BeginPushToTalk(PushToTalkSource source)
+    private void BeginPushToTalk(PushToTalkSource source, long pressTimestamp)
     {
-        if (_disposed || _isChangingCapture || _isCancellingCapture || _isProcessing || CurrentAudioCaptureState.IsUserPaused) return;
+        // Нажатие во время распознавания прошлой фразы разрешено: у каждой записи свой TakeContext.
+        if (_disposed || _isChangingCapture || _isCancellingCapture || CurrentAudioCaptureState.IsUserPaused) return;
         if (_pushToTalk.Press(source) && CanStartRecording && !_isRecording)
         {
-            _captureStartTask = StartRecordingAsync();
+            _ = StartRecordingAsync(pressTimestamp != 0 ? pressTimestamp : Stopwatch.GetTimestamp());
         }
     }
 
@@ -589,9 +575,8 @@ public partial class MainWindow : Window, IDisposable
         _pushToTalk.SetPaused(_isChangingCapture || change.State.IsUserPaused);
         if (change.ActiveTakeCancelled)
         {
-            _operationCancellation?.Cancel();
+            foreach (var take in _activeTakes.ToArray()) CancelTake(take);
             _isRecording = false;
-            _isProcessing = false;
             _interactionHooks.DisarmCancel();
             ShowError("Запись отменена");
         }
@@ -625,11 +610,11 @@ public partial class MainWindow : Window, IDisposable
         });
     }
 
-    private async Task EndPushToTalkAsync(PushToTalkSource source)
+    private async Task EndPushToTalkAsync(PushToTalkSource source, long releaseTimestamp)
     {
-        if (_pushToTalk.Release(source) && _isRecording && !_isProcessing)
+        if (_pushToTalk.Release(source) && _isRecording)
         {
-            await EndRecordingAsync();
+            await EndRecordingAsync(releaseTimestamp != 0 ? releaseTimestamp : Stopwatch.GetTimestamp());
         }
     }
 
@@ -709,6 +694,8 @@ public partial class MainWindow : Window, IDisposable
         StopStateAnimations();
         ((Storyboard)Resources["EnterStoryboard"]).Stop(this);
         _exitStoryboard.Stop(this);
+        _exitReducedStoryboard.Stop(this);
+        ((Storyboard)Resources["EnterReducedStoryboard"]).Stop(this);
         BeginAnimation(WidthProperty, null);
         CapsuleShell.Opacity = 1;
         ShadowSurface.Opacity = 1;
@@ -736,323 +723,6 @@ public partial class MainWindow : Window, IDisposable
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(outputPath);
         encoder.Save(stream);
-    }
-
-    public async Task ToggleRecordingAsync()
-    {
-        if (_disposed || _isCancellingCapture || _isChangingCapture || _isProcessing) return;
-        if (_isRecording || _isStartingCapture) await EndRecordingAsync();
-        else if (CanStartRecording) await (_captureStartTask = StartRecordingAsync());
-    }
-
-    private async Task StartRecordingAsync()
-    {
-        AppLog.Write("StartRecording requested");
-        // The recognizer unloads itself when idle; reload it while the user is still speaking.
-        if (_transcription is WhisperRussianService { IsLoaded: false }) BeginWarmUp(showProgress: false);
-        _recentRecordings.StopPlayback();
-        _forceHideAfterCancellation = false;
-        _hideTimer.Stop();
-        _operationCancellation?.Dispose();
-        _operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCancellation.Token);
-        var cancellationToken = _operationCancellation.Token;
-        // Foreground intent is captured once, before any asynchronous device operation.
-        _targetWindow = _interactionHooks.CaptureForegroundTarget();
-        _recordingStartedUtc = DateTime.UtcNow;
-        _isStartingCapture = true;
-        _isRecording = true;
-        _interactionHooks.ArmCancel();
-        SetProcessingState("Подключаю микрофон", null);
-        ShowCapsule();
-        try
-        {
-            await _captureInitializationTask;
-            await RunCaptureOperationAsync(_audioCapture.Start, cancellationToken);
-            cancellationToken.ThrowIfCancellationRequested();
-            if (_disposed) return;
-            SetListeningState();
-            RefreshCapsuleAnimationEligibility();
-            PlayFeedback(FeedbackSound.RecordingStarted);
-            AppLog.Write($"Audio capture started, target=0x{_targetWindow:X}");
-        }
-        catch (OperationCanceledException)
-        {
-            _isRecording = false;
-            _interactionHooks.DisarmCancel();
-        }
-        catch (Exception exception)
-        {
-            _isRecording = false;
-            _pushToTalk.Reset();
-            _interactionHooks.DisarmCancel();
-            AppLog.Write("StartRecording failed", exception);
-            if (!_disposed) ShowError(GetMicrophoneError(exception));
-        }
-        finally { _isStartingCapture = false; }
-    }
-
-    private Task EndRecordingAsync() =>
-        _dictationTask is { IsCompleted: false } ? _dictationTask :
-            _dictationTask = FinishPendingRecordingAsync();
-
-    private async Task FinishPendingRecordingAsync()
-    {
-        if (_captureStartTask is { } starting) await starting;
-        if (!_disposed && _isRecording && _operationCancellation is { IsCancellationRequested: false })
-            await StopAndTranscribeAsync();
-    }
-
-    private async Task StopAndTranscribeAsync()
-    {
-        AppLog.Write($"StopAndTranscribe requested, held={(DateTime.UtcNow - _recordingStartedUtc).TotalSeconds:0.00}s");
-        _isRecording = false;
-        _isProcessing = true;
-        SetProcessingState("Распознаю", null);
-        var cancellationToken = _operationCancellation?.Token ?? CancellationToken.None;
-        var trace = new DictationTrace();
-        var textSettings = _currentTextSettings;
-        trace.Mark(DictationStage.CaptureStarted);
-        string? audioPath = null;
-        AudioCaptureResult? completedCapture = null;
-        var recordingStatus = RecentRecordingStatus.ProcessingFailed;
-
-        try
-        {
-            var capture = await RunCaptureOperationAsync(() => _audioCapture.StopAsync(cancellationToken), cancellationToken);
-            completedCapture = capture;
-            trace.Mark(DictationStage.CaptureStopped);
-            PlayFeedback(FeedbackSound.RecordingStopped);
-            audioPath = capture.Path;
-            AppLog.Write(
-                $"Audio capture stopped: samples={capture.Samples.Length}, " +
-                $"duration={capture.Duration.TotalSeconds:0.00}s, speech={capture.DetectedSpeech.TotalSeconds:0.00}s, " +
-                $"peak={capture.PeakDecibels:0.0}dBFS");
-            trace.Mark(DictationStage.SpeechChecked);
-            if (!capture.HasSpeech)
-            {
-                AppLog.Write($"No speech detected ({capture.RejectionMessage ?? "unspecified"}); delivery skipped");
-                _isProcessing = false;
-
-                // Silence used to be indistinguishable from a broken microphone: the capsule simply
-                // disappeared. Say which one it was.
-                if (capture.RejectionMessage is { Length: > 0 } reason)
-                {
-                    ShowError(reason);
-                }
-                else
-                {
-                    HideCapsuleAnimated();
-                }
-                return;
-            }
-            var progress = new Progress<ModelProgress>(value =>
-            {
-                if (!cancellationToken.IsCancellationRequested &&
-                    RecognitionProgressPolicy.ShouldRenderEngineProgress(value.Label))
-                {
-                    // Recognition already owns a continuous orbit state. Chunk
-                    // counts and percentages are engine details; repainting the
-                    // state for every long-form chunk also restarts its motion.
-                    SetProcessingState(value.Label, value.Percentage);
-                }
-            });
-            var result = _transcription is ISampleTranscriptionService sampleTranscription
-                ? await sampleTranscription.TranscribeSamplesAsync(
-                    capture.Samples, capture.SampleRate, cancellationToken)
-                : audioPath is not null
-                    ? await _transcription.TranscribeAsync(audioPath, progress, cancellationToken)
-                    : throw new NotSupportedException("Движок не поддерживает распознавание из памяти.");
-            trace.Mark(DictationStage.PrimaryDecoded);
-            var entityProfile = EntityProfilePolicy.ResolveForWindow(
-                _targetWindow,
-                result.Text,
-                _mixedLanguageMode);
-            var text = _postProcessor.Process(result.Text, entityProfile);
-            trace.Mark(DictationStage.TextFormatted);
-            AppLog.Write($"Transcription complete: characters={text.Length}, elapsed={result.Elapsed.TotalSeconds:0.00}s");
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                ShowError("Не услышал");
-                return;
-            }
-            recordingStatus = RecentRecordingStatus.Recognized;
-
-            // Голосовая команда «переведи …» / «… переведи на немецкий» идёт
-            // только через проверенный current-user Engine Host. При ошибке
-            // ничего не вставляем: оригинал нельзя выдавать за успешный перевод.
-            var directive = textSettings.PreserveSpokenWords ? null : TranslateCommandParser.TryParse(text);
-            if (directive is not null)
-            {
-                AppLog.Write($"Команда перевода: → {directive.TargetLanguage}, {directive.Payload.Length} симв.");
-                SetProcessingState("Перевожу", null);
-                var translation = await _translator.TranslateAsync(
-                    directive.Payload,
-                    directive.TargetLanguage,
-                    label => Dispatcher.Invoke(() => SetProcessingState(label, null)),
-                    cancellationToken);
-
-                if (translation.Succeeded)
-                {
-                    text = translation.Text!;
-                    AppLog.Write($"Перевод готов: {text.Length} симв.");
-                }
-                else
-                {
-                    AppLog.Write($"Перевод не вставлен: {translation.Failure}");
-                    ShowError(translation.UserMessage);
-                    return;
-                }
-            }
-
-            var audioFormattingUnavailable = result.AudioFormatting == AudioFormattingStatus.Unavailable;
-            string? formattingMessage = null;
-            if (directive is null && textSettings.FormatWithQwen && !textSettings.PreserveSpokenWords)
-            {
-                SetProcessingState("Оформляю", null);
-                var budget = double.IsFinite(textSettings.FormatBudgetSeconds)
-                    ? Math.Clamp(textSettings.FormatBudgetSeconds, 0.5, 5) : 2;
-                var formatted = await FormatTextWithHostAsync(text, textSettings.TextModelEndpoint,
-                    textSettings.TextModelId, TimeSpan.FromSeconds(budget), allowWordCorrection: false, cancellationToken);
-                text = formatted.Text;
-                formattingMessage = formatted.Message;
-                AppLog.Write($"Text formatting status={formatted.Status}; elapsedMs={formatted.Elapsed.TotalMilliseconds:0}; characters={text.Length}");
-                trace.Mark(DictationStage.TextEnhanced);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            var deliveryResult = await _delivery.DeliverAsync(text, _targetWindow, cancellationToken);
-            trace.Mark(DictationStage.Delivered);
-            LastOperationSummary = $"От отпускания до результата: {trace.Total.TotalSeconds:0.00} с" +
-                (textSettings.PreserveSpokenWords ? " · дословно" :
-                    formattingMessage is null ? " · быстрое оформление" : " · " + formattingMessage);
-            if (audioFormattingUnavailable)
-                LastOperationSummary += " · оформление временно недоступно";
-            AppLog.Write($"Dictation timing: {trace.Format()}");
-            switch (deliveryResult.Status)
-            {
-                case DictationDeliveryStatus.Inserted:
-                    ShowSuccess(audioFormattingUnavailable ? "Вставлено без оформления" : "Вставлено");
-                    break;
-                case DictationDeliveryStatus.ClipboardFallback:
-                    ShowClipboardFallback();
-                    break;
-                case DictationDeliveryStatus.ClipboardFailed:
-                    ShowError("Буфер занят");
-                    break;
-
-                // Без этой ветки капсула оставалась в состоянии «Распознаю» навсегда: ни один из
-                // показов не вызывался, а значит не вызывался и ScheduleHide. Пользователь при
-                // этом вообще не узнавал, почему текст не появился.
-                case DictationDeliveryStatus.SuppressedForSensitiveTarget:
-                    ShowError("Не вставляю в пароли");
-                    break;
-
-                default:
-                    AppLog.Write($"Unhandled delivery status: {deliveryResult.Status}");
-                    ShowError("Ошибка");
-                    break;
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            AppLog.Write("Recording operation cancelled");
-            if (!_disposed) { SetReadyState(); ScheduleHide(); }
-        }
-        catch (Exception exception)
-        {
-            AppLog.Write("StopAndTranscribe failed", exception);
-            if (!_disposed) ShowError("Ошибка");
-        }
-        finally
-        {
-            _isProcessing = false;
-            _interactionHooks.DisarmCancel();
-
-            // Persistence is deliberately queued only after capture has completed and speech has
-            // been accepted. Escape/pause cancellation never reaches this branch, and Media
-            // Foundation work runs on the bounded history worker rather than the UI/WASAPI thread.
-            if (RecentRecordingPersistencePolicy.ShouldQueue(
-                    completedCapture,
-                    cancellationToken.IsCancellationRequested,
-                    _saveRecentRecordings) &&
-                completedCapture is { } accepted)
-            {
-                _recentRecordings.TryQueue(
-                    accepted.Samples,
-                    accepted.SampleRate,
-                    accepted.Duration,
-                    recordingStatus);
-            }
-
-            // Diagnostic/corpus mode can still return an explicit temporary WAV. Normal dictation
-            // is memory-only, so cancellation normally has no path to resolve or delete.
-            if (audioPath is null && _captureCancelTask is not { IsCompleted: false })
-                audioPath = await TryResolveDiscardedRecordingAsync();
-            if (audioPath is not null)
-            {
-                TryDelete(audioPath);
-            }
-
-        }
-    }
-
-    private async Task<string?> TryResolveDiscardedRecordingAsync()
-    {
-        try
-        {
-            return await RunCaptureOperationAsync(_audioCapture.CancelAsync, cleanup: true);
-        }
-        catch (Exception exception)
-        {
-            AppLog.Write("Could not resolve discarded recording path", exception);
-            return null;
-        }
-    }
-
-    private async void CloseButton_OnClick(object sender, RoutedEventArgs e) => await CancelDictationAsync();
-
-    private async void OnCancelKeyPressed(object? sender, EventArgs e)
-    {
-        AppLog.Write("Dictation cancelled with the cancel key");
-        await CancelDictationAsync();
-    }
-
-    private Task CancelDictationAsync() =>
-        _captureCancelTask is { IsCompleted: false } ? _captureCancelTask :
-            _captureCancelTask = CancelDictationCoreAsync();
-
-    private async Task CancelDictationCoreAsync()
-    {
-        _interactionHooks.DisarmCancel();
-        _operationCancellation?.Cancel();
-        _pushToTalk.Reset();
-        _isCancellingCapture = true;
-        var hadCapture = _isRecording || _isStartingCapture || _isProcessing;
-        _isRecording = false;
-        StopWaveformAnimation();
-        if (!_disposed) HideCapsuleAnimated(forceAfterCancellation: true);
-        try
-        {
-            // Start cannot be interrupted inside the driver's synchronous call. Once it returns,
-            // this same owned queue clears its buffer before any later Start/device operation.
-            if (_captureStartTask is { } starting) await starting;
-            if (hadCapture) TryDelete(await CancelCaptureAsync());
-            if (_dictationTask is { } dictation) await dictation;
-        }
-        finally { _isCancellingCapture = false; }
-    }
-
-    private async Task<string?> CancelCaptureAsync()
-    {
-        try
-        {
-            return await RunCaptureOperationAsync(_audioCapture.CancelAsync, cleanup: true);
-        }
-        catch (Exception exception)
-        {
-            AppLog.Write("Cancel of the active capture failed", exception);
-            return null;
-        }
     }
 
     public Action? RequestOpenSettings { get; set; }
@@ -1134,6 +804,7 @@ public partial class MainWindow : Window, IDisposable
         _hideRequested = false;
         _forceHideAfterCancellation = false;
         _exitStoryboard.Stop(this);
+        _exitReducedStoryboard.Stop(this);
         var wasVisible = IsVisible;
         var handle = new WindowInteropHelper(this).Handle;
         if (!IsVisible)
@@ -1151,11 +822,11 @@ public partial class MainWindow : Window, IDisposable
         {
             if (IsReducedMotion)
             {
-                CapsuleShell.Opacity = 1;
-                ShadowSurface.Opacity = 1;
+                // «Уменьшить движение»: только прозрачность, 80 мс.
                 ShellScale.ScaleX = 1;
                 ShellScale.ScaleY = 1;
                 ShellTranslate.Y = 0;
+                ((Storyboard)Resources["EnterReducedStoryboard"]).Begin(this, true);
             }
             else
             {
@@ -1175,16 +846,21 @@ public partial class MainWindow : Window, IDisposable
         _hideRequested = true;
         _forceHideAfterCancellation = forceAfterCancellation;
         StopWaveformAnimation();
-        if (IsReducedMotion)
+        (IsReducedMotion ? _exitReducedStoryboard : _exitStoryboard).Begin(this, true);
+    }
+
+    private void OnExitStoryboardCompleted(object? sender, EventArgs args)
+    {
+        if (CapsuleHidePolicy.CanComplete(
+                _hideRequested,
+                _isRecording,
+                _isProcessing,
+                _forceHideAfterCancellation))
         {
             _hideRequested = false;
             _forceHideAfterCancellation = false;
             _displayingBackgroundModelProgress = false;
             Hide();
-        }
-        else
-        {
-            _exitStoryboard.Begin(this, true);
         }
     }
 
@@ -1348,6 +1024,10 @@ public partial class MainWindow : Window, IDisposable
         ((Storyboard)Resources["SuccessStoryboard"]).Stop(this);
         ((Storyboard)Resources["ErrorStoryboard"]).Stop(this);
         ((Storyboard)Resources["DownloadStoryboard"]).Stop(this);
+        ((Storyboard)Resources["StartRingStoryboard"]).Stop(this);
+        ((Storyboard)Resources["TailArcStoryboard"]).Stop(this);
+        StartRing.Opacity = 0;
+        if (!_isFinishingTail) TailArc.Visibility = Visibility.Collapsed;
     }
 
     private void SetWaveform(double scaleY)
@@ -1377,7 +1057,7 @@ public partial class MainWindow : Window, IDisposable
     /// microphone permission and a denied write to %LOCALAPPDATA%. Somebody whose disk permissions
     /// are wrong was being told to check their microphone.
     /// </remarks>
-    private static string GetMicrophoneError(Exception exception)
+    internal static string GetMicrophoneError(Exception exception)
     {
         if (exception is UnauthorizedAccessException)
         {
@@ -1389,11 +1069,8 @@ public partial class MainWindow : Window, IDisposable
             return "Запись уже идёт";
         }
 
-        var message = exception.Message;
-        return message.Contains("NoDriver", StringComparison.OrdinalIgnoreCase) ||
-               message.Contains("Access", StringComparison.OrdinalIgnoreCase)
-            ? "Разрешите доступ к микрофону"
-            : "Нет микрофона";
+        // «Не найден» и «занят/недоступен» — разные действия для пользователя.
+        return MicrophoneFailure.Message(exception);
     }
 
     private static SolidColorBrush FrozenBrush(string color)
@@ -1439,7 +1116,7 @@ public partial class MainWindow : Window, IDisposable
         _hideTimer.Stop();
         StopWaveformAnimation();
         if (_positionInitialized) _positionService.Save(Left, Top, Width);
-        _operationCancellation?.Cancel();
+        foreach (var take in _activeTakes.ToArray()) take.Cancel();
         _pushToTalk.Reset();
         _lifetimeCancellation.Cancel();
         _hotkey?.Dispose();
@@ -1451,8 +1128,8 @@ public partial class MainWindow : Window, IDisposable
         _themeService.ThemeChanged -= OnCapsuleThemeChanged;
         try
         {
-            await Task.WhenAll(new[] { _captureStartTask, _dictationTask, _captureCancelTask,
-                _captureInitializationTask, _captureRefreshTask, _inventoryNotificationTask, _translationWarmupTask, _modelWarmupTask }
+            await Task.WhenAll(PendingTakeTasks().Concat(new[] { _captureCancelTask,
+                _captureInitializationTask, _captureRefreshTask, _inventoryNotificationTask, _translationWarmupTask, _modelWarmupTask })
                 .Where(task => task is not null).Cast<Task>());
         }
         catch (OperationCanceledException) { }
@@ -1466,7 +1143,6 @@ public partial class MainWindow : Window, IDisposable
                 DisposeOwned(_transcription); DisposeOwned(_translator); DisposeOwned(_textFormatter);
                 DisposeOwned(_localQwen); DisposeOwned(_modelManager);
             });
-            _operationCancellation?.Dispose();
             _lifetimeCancellation.Dispose();
         }
         _isRecording = false;

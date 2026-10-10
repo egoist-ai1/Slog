@@ -1,4 +1,4 @@
-using Egoist.Voice.Core;
+﻿using Egoist.Voice.Core;
 using Egoist.Voice.Services;
 
 namespace Egoist.Voice;
@@ -6,6 +6,32 @@ namespace Egoist.Voice;
 public partial class MainWindow
 {
     private Task? _modelWarmupTask;
+    private const string ModelPreparingLabel = "Готовлю модель";
+
+    /// <summary>
+    /// Если модель ещё прогревается, ждёт её готовности (звук к этому моменту уже записан), показывая
+    /// «Готовлю модель» с прогрессом. Ошибки прогрева не бросает: распознавание само догрузит модель.
+    /// </summary>
+    private async Task EnsureRecognitionReadyAsync(TakeContext take)
+    {
+        if (_modelWarmupTask is not { IsCompleted: false } warmup) return;
+        _modelAwaiter = take;
+        try
+        {
+            if (OwnsCapsule(take)) SetProcessingState(ModelPreparingLabel, null);
+            await warmup.WaitAsync(take.Token);
+        }
+        catch (OperationCanceledException) when (!take.Token.IsCancellationRequested) { }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            AppLog.Write("Model warm-up ended with an error before recognition", exception);
+        }
+        finally
+        {
+            if (ReferenceEquals(_modelAwaiter, take)) _modelAwaiter = null;
+        }
+        if (OwnsCapsule(take)) SetProcessingState("Распознаю", null);
+    }
     public void BeginWarmUp(bool showProgress = true, bool announceModelDownloads = false)
     {
         _announceModelDownloads = announceModelDownloads;
@@ -17,7 +43,14 @@ public partial class MainWindow
     {
         var progress = new Progress<ModelProgress>(value =>
         {
-            if (!_disposed && showProgress && !_isRecording && !_isProcessing)
+            if (_disposed) return;
+            // Запись уже ждёт модель: прогресс прогрева показывает «Готовлю модель».
+            if (_modelAwaiter is { } awaiter)
+            {
+                if (OwnsCapsule(awaiter)) SetProcessingState(ModelPreparingLabel, value.Percentage);
+                return;
+            }
+            if (showProgress && !_isRecording && !_isProcessing)
             {
                 SetProcessingState(value.Label, value.Percentage);
             }
