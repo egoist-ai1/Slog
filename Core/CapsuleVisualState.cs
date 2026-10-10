@@ -1,8 +1,9 @@
-namespace Egoist.Voice.Core;
+﻿namespace Egoist.Voice.Core;
 
 internal enum CapsuleVisualStateKind
 {
     Ready,
+    Arming,
     Listening,
     Recognizing,
     Success,

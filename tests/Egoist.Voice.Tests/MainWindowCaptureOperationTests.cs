@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Windows;
@@ -166,7 +166,7 @@ public sealed class MainWindowCaptureOperationTests(CaptureWindowDispatcher disp
         try
         {
             await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));f.Foreground=5678;gate.Release.Set();await start;
-            Assert.Equal((nint)1234,(nint)typeof(MainWindow).GetField("_targetWindow",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(f.Window)!);
+            Assert.Equal((nint)1234,f.Window.CurrentTargetWindow);
         }
         finally{gate.Release.Set();}
         Assert.Equal(1,f.ForegroundReads);await f.CancelAsync();
@@ -232,14 +232,15 @@ public sealed class MainWindowCaptureOperationTests(CaptureWindowDispatcher disp
     });
 
     [Fact]
-    public Task Active_recording_start_cue_cannot_suppress_first_audio_callback() => dispatcher.RunAsync(async () =>
+    public Task Start_cue_plays_exactly_once_after_successful_capture_start() => dispatcher.RunAsync(async () =>
     {
         await using var f = new WindowFixture(); await f.ReadyAsync();
         f.Settings.Save(f.Settings.Load() with { SoundFeedback = true });
         f.Window.ApplyDictationSettings();
         await f.Window.ToggleRecordingAsync();
         Assert.True(f.Capture.Active);
-        Assert.Equal(0, f.Capture.SuppressCount);
+        // Сигнал играет после успешного старта захвата; окно подавления в захвате ограничено 40 мс.
+        Assert.Equal(1, f.Capture.SuppressCount);
         await f.CancelAsync();
     });
 
@@ -462,8 +463,8 @@ internal sealed class WindowFixture:IAsyncDisposable
     {
         var method=typeof(MainWindow).GetMethod("RefreshCaptureDevicesAsync");if(method is not null)await (Task)method.Invoke(Window,null)!;
     }
-    internal void Press(PushToTalkSource source)=>typeof(MainWindow).GetMethod("BeginPushToTalk",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Window,[source]);
-    internal Task ReleaseAsync(PushToTalkSource source)=>(Task)typeof(MainWindow).GetMethod("EndPushToTalkAsync",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Window,[source])!;
+    internal void Press(PushToTalkSource source)=>typeof(MainWindow).GetMethod("BeginPushToTalk",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Window,[source,System.Diagnostics.Stopwatch.GetTimestamp()]);
+    internal Task ReleaseAsync(PushToTalkSource source)=>(Task)typeof(MainWindow).GetMethod("EndPushToTalkAsync",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Window,[source,System.Diagnostics.Stopwatch.GetTimestamp()])!;
     internal Task CancelAsync()=>(Task)typeof(MainWindow).GetMethod("CancelDictationAsync",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Window,null)!;
     public async ValueTask DisposeAsync()
     {

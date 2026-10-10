@@ -1,3 +1,4 @@
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
@@ -44,7 +45,7 @@ public partial class MainWindow
         Closed += (_, _) => _waveSubscription?.Stop();
     }
 
-    private bool CanRenderWaveform => !_disposed && _isRecording && IsLoaded && IsVisible &&
+    private bool CanRenderWaveform => !_disposed && (_isRecording || _isFinishingTail) && IsLoaded && IsVisible &&
         WindowState != WindowState.Minimized && Waveform.IsVisible;
 
     private bool CanRenderCapsuleMotion => !_disposed && IsLoaded && IsVisible &&
@@ -111,14 +112,16 @@ public partial class MainWindow
 
     private void AnimateWaveformFrame(double deltaSeconds = 1d / 60d)
     {
-        if (!_isRecording)
+        if (!_isRecording && !_isFinishingTail)
         {
             return;
         }
 
-        _audioLevelCurrent = CapsuleWaveformProfile.SmoothLevel(_audioLevelCurrent, _audioLevelTarget, deltaSeconds);
-        _timbreBassCurrent = CapsuleWaveformProfile.SmoothLevel(_timbreBassCurrent, _timbreBassTarget, deltaSeconds);
-        _timbreTrebleCurrent = CapsuleWaveformProfile.SmoothLevel(_timbreTrebleCurrent, _timbreTrebleTarget, deltaSeconds);
+        // После отпускания волна гаснет: хвост ещё пишется, но уровень на экране тянем к нулю.
+        var fading = _isFinishingTail && !_isRecording;
+        _audioLevelCurrent = CapsuleWaveformProfile.SmoothLevel(_audioLevelCurrent, fading ? 0 : _audioLevelTarget, deltaSeconds);
+        _timbreBassCurrent = CapsuleWaveformProfile.SmoothLevel(_timbreBassCurrent, fading ? 0 : _timbreBassTarget, deltaSeconds);
+        _timbreTrebleCurrent = CapsuleWaveformProfile.SmoothLevel(_timbreTrebleCurrent, fading ? 0 : _timbreTrebleTarget, deltaSeconds);
         var frameFactor = Math.Clamp(deltaSeconds * 60, 0.25, 3);
         _wavePhase += (0.09 + (_audioLevelCurrent * 0.14) + (_timbreTrebleCurrent * 0.05)) * frameFactor;
         VoiceSpectrum spectrum;
@@ -126,6 +129,38 @@ public partial class MainWindow
         Waveform.Advance(_audioLevelCurrent, _wavePhase, deltaSeconds, IsReducedMotion,
             _timbreBassCurrent, 0, _timbreTrebleCurrent, spectrum);
         UpdateRecordingTimer();
+    }
+
+    /// <summary>Нажатие принято, захват открывается: компактный диск без текста.</summary>
+    private void SetArmingState()
+    {
+        _isFinishingTail = false;
+        TailArc.Visibility = Visibility.Collapsed;
+        ApplyVisualStateLayout(new CapsuleVisualState(CapsuleVisualStateKind.Arming));
+        StopWaveformAnimation();
+        SetStateDisc(System.Windows.Media.Brushes.Transparent);
+        SetStateBorder(IdleBorderBrush);
+        StateHalo.Opacity = 0;
+        StopStateAnimations();
+    }
+
+    /// <summary>«Можно говорить»: от диска расходится одно кольцо (ширина раскрывается в layout).</summary>
+    private void PlayReadyToSpeakAnimation() => BeginStateStoryboard("StartRingStoryboard");
+
+    /// <summary>Хвост ещё пишется: волна гаснет, вокруг диска сжимается дуга.</summary>
+    private void BeginFinishingVisual()
+    {
+        _isFinishingTail = true;
+        if (IsReducedMotion || !CanRenderCapsuleMotion) return;
+        TailArc.Visibility = Visibility.Visible;
+        BeginStateStoryboard("TailArcStoryboard");
+    }
+
+    private void EndFinishingVisual()
+    {
+        _isFinishingTail = false;
+        TailArc.Visibility = Visibility.Collapsed;
+        ((Storyboard)Resources["TailArcStoryboard"]).Stop(this);
     }
 
     private void SetReadyState()
@@ -185,6 +220,7 @@ public partial class MainWindow
     {
         PlayFeedback(FeedbackSound.TextInserted);
         ApplyVisualStateLayout(new CapsuleVisualState(CapsuleVisualStateKind.Success, label));
+        _isFinishingTail = false;
         StopWaveformAnimation();
         SetStateDisc(SuccessDiscBrush);
         SetStateBorder(IdleBorderBrush);
@@ -192,8 +228,12 @@ public partial class MainWindow
         StopStateAnimations();
         BeginStateStoryboard("SuccessStoryboard");
         ShowCapsule();
-        ScheduleHide();
+        // Галочка 180 мс + пауза 700 мс; предупреждающие подписи читаются дольше.
+        ScheduleHide(label == "Вставлено" ? SuccessHoldDelay : TimeSpan.FromSeconds(2.2));
     }
+
+    private static readonly TimeSpan SuccessHoldDelay = TimeSpan.FromMilliseconds(880);
+    private static readonly TimeSpan ErrorHoldDelay = TimeSpan.FromSeconds(2.5);
 
     private void ShowClipboardFallback()
     {
@@ -250,9 +290,8 @@ public partial class MainWindow
     {
         PlayFeedback(FeedbackSound.Error);
         ApplyVisualStateLayout(new CapsuleVisualState(CapsuleVisualStateKind.Error, title));
+        _isFinishingTail = false;
         StopWaveformAnimation();
-        _isRecording = false;
-        _isProcessing = false;
         SetStateDisc(SuccessDiscBrush);
 
         // Recording uses a filled microphone disc; failures use a scarlet outline and error icon.
@@ -261,7 +300,7 @@ public partial class MainWindow
         StopStateAnimations();
         BeginStateStoryboard("ErrorStoryboard");
         ShowCapsule();
-        ScheduleHide(TimeSpan.FromSeconds(5));
+        ScheduleHide(ErrorHoldDelay);
     }
 
     private void SetCancelActionVisible(bool visible)
@@ -293,7 +332,7 @@ public partial class MainWindow
         {
             AppLog.Write($"Recording exceeded {MaximumRecordingDuration.TotalMinutes:0} minutes; stopping");
             _pushToTalk.Reset();
-            _ = StopAndTranscribeAsync();
+            _ = EndRecordingAsync(Stopwatch.GetTimestamp());
             return;
         }
 
@@ -348,8 +387,8 @@ public partial class MainWindow
 
     private void PlayFeedback(FeedbackSound sound, bool preview = false)
     {
-        // An acoustic cue during capture suppresses the beginning of the recorded PCM.
-        if (sound == FeedbackSound.RecordingStarted && !preview && _isRecording) return;
+        // Сигнал старта вызывается строго после успешного открытия захвата; подавление звука в захвате
+        // ограничено 40 мс (AudioCaptureService.SuppressFeedbackAudio), pre-roll речь не теряет.
         if (preview)
         {
             _sounds.Preview(sound);
@@ -374,6 +413,7 @@ public partial class MainWindow
         var announcement = state.Kind switch
         {
             CapsuleVisualStateKind.Listening => "Запись идёт",
+            CapsuleVisualStateKind.Arming => "Подготовка записи",
             CapsuleVisualStateKind.Recognizing => state.Progress is null
                 ? state.Label ?? "Распознавание"
                 : $"{state.Label} {state.Progress:0} процентов",
@@ -403,7 +443,7 @@ public partial class MainWindow
         _lastVisualLayout = state;
         var stateChanged = _lastVisualStateKind != state.Kind;
         _lastVisualStateKind = state.Kind;
-        MicIcon.Visibility = state.Kind is CapsuleVisualStateKind.Ready or CapsuleVisualStateKind.Listening or CapsuleVisualStateKind.Recognizing
+        MicIcon.Visibility = state.Kind is CapsuleVisualStateKind.Ready or CapsuleVisualStateKind.Arming or CapsuleVisualStateKind.Listening or CapsuleVisualStateKind.Recognizing
             ? Visibility.Visible : Visibility.Collapsed;
         CheckIcon.Visibility = state.Kind == CapsuleVisualStateKind.Success
             ? Visibility.Visible : Visibility.Collapsed;
@@ -427,7 +467,7 @@ public partial class MainWindow
         DetailText.Text = state.Kind == CapsuleVisualStateKind.Recognizing && state.Progress is not null
             ? $"{state.Label} {state.Progress:0}%"
             : state.Label ?? string.Empty;
-        DetailText.Visibility = state.Kind == CapsuleVisualStateKind.Listening ||
+        DetailText.Visibility = state.Kind is CapsuleVisualStateKind.Listening or CapsuleVisualStateKind.Arming ||
                                 state.Kind == CapsuleVisualStateKind.Recognizing && state.Progress is null
             ? Visibility.Collapsed : Visibility.Visible;
         SetCancelActionVisible(state.CanCancel);
@@ -435,7 +475,9 @@ public partial class MainWindow
 
         if (state.Kind != CapsuleVisualStateKind.Listening)
             SetRecordingTimerVisible(false);
-        AnimateCapsuleWidth(256);
+        GapColumn.Width = new GridLength(state.Kind == CapsuleVisualStateKind.Arming ? 0 : 10);
+        AnimateCapsuleWidth(state.Kind == CapsuleVisualStateKind.Arming ? ArmingWidth : 256,
+            opening: state.Kind == CapsuleVisualStateKind.Listening);
 
         if (stateChanged) ApplyThemeToCapsule();
 
@@ -476,7 +518,11 @@ public partial class MainWindow
         StopStateAnimations();
         ((Storyboard)Resources["StateTransitionStoryboard"]).Stop(this);
         ((Storyboard)Resources["EnterStoryboard"]).Stop(this);
+        ((Storyboard)Resources["EnterReducedStoryboard"]).Stop(this);
         _exitStoryboard.Stop(this);
+        _exitReducedStoryboard.Stop(this);
+        _isFinishingTail = false;
+        TailArc.Visibility = Visibility.Collapsed;
 
         CapsuleShell.Opacity = 1;
         ShadowSurface.Opacity = 1;
@@ -615,7 +661,9 @@ public partial class MainWindow
     /// layout pass and a re-rasterization of the supersampled chrome behind it. The window is
     /// simply large enough for the widest state now, and the body is centred inside it.
     /// </remarks>
-    private void AnimateCapsuleWidth(double targetWidth)
+    private const double ArmingWidth = 48;
+
+    private void AnimateCapsuleWidth(double targetWidth, bool opening = false)
     {
         var currentWidth = CapsuleBody.ActualWidth > 0 ? CapsuleBody.ActualWidth : CapsuleBody.Width;
         if (Math.Abs(currentWidth - targetWidth) < 0.1)
@@ -627,6 +675,19 @@ public partial class MainWindow
         {
             CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, null);
             CapsuleBody.Width = targetWidth;
+            return;
+        }
+
+        if (opening && targetWidth > currentWidth)
+        {
+            // «Раскрытие под волну»: 160 мс, перелёт не больше 2 %.
+            var spring = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.HoldEnd };
+            spring.KeyFrames.Add(new LinearDoubleKeyFrame(currentWidth, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+            spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth * 1.02,
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(110)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+            spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth,
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), new CubicEase { EasingMode = EasingMode.EaseInOut }));
+            CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, spring, HandoffBehavior.SnapshotAndReplace);
             return;
         }
 
