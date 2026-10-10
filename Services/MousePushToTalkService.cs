@@ -200,7 +200,9 @@ public sealed class MousePushToTalkService : IDisposable
     /// низкоуровневый хук. В логах это давало десятки «hook stopped» без единого реально
     /// удерживаемого нажатия. Поэтому сдвиг засчитывается, только если за окно было настоящее
     /// пользовательское действие (GetLastInputInfo), а удерживаемая кнопка отпускается только
-    /// при подтверждении в двух окнах подряд и когда GetAsyncKeyState не видит её нажатой.
+    /// при подтверждении в двух окнах подряд. Состояние кнопки у системы не спрашиваем: хук
+    /// глушит события XBUTTON, поэтому система их не видела и GetAsyncKeyState всегда ответил бы
+    /// «не нажата» — такая проверка ничего бы не защищала.
     /// </remarks>
     private void CheckHookHealth()
     {
@@ -255,9 +257,9 @@ public sealed class MousePushToTalkService : IDisposable
         FlushTrace("hook-suspect");
         _suspectStreak = 0;
 
-        // Потерянное отпускание: кнопку отпустили, пока хук был снят. Отпускаем, только если
-        // система тоже не видит кнопку нажатой — настоящее удержание не прерываем никогда.
-        if (held && !IsPhysicallyDown())
+        // Потерянное отпускание: кнопку отпустили, пока хук был снят. Защита от ложного отпускания
+        // здесь одна — подтверждение в двух окнах подряд (_suspectStreak выше).
+        if (held)
         {
             AppLog.Write($"{ButtonName} was still held when the hook died; releasing");
             CancelReleaseTimer();
@@ -298,9 +300,6 @@ public sealed class MousePushToTalkService : IDisposable
         var ageMs = unchecked((uint)Environment.TickCount - info.Time);
         return nowTick - ageMs >= windowStartTick;
     }
-
-    private bool IsPhysicallyDown() =>
-        (GetAsyncKeyState(_button == MouseSideButton.Mouse5 ? VkXButton2 : VkXButton1) & 0x8000) != 0;
 
     private void FlushTrace(string reason)
     {
@@ -548,8 +547,6 @@ public sealed class MousePushToTalkService : IDisposable
         return !_thread.IsAlive;
     }
 
-    private const int VkXButton1 = 0x05;
-    private const int VkXButton2 = 0x06;
 
     private delegate nint LowLevelMouseProc(int code, nint message, nint data);
 
@@ -642,8 +639,6 @@ public sealed class MousePushToTalkService : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetLastInputInfo(ref LastInputInfo info);
 
-    [DllImport("user32.dll")]
-    private static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
