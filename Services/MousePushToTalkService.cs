@@ -25,6 +25,8 @@ public sealed class MousePushToTalkService : IDisposable
     private const int WmUser = 0x0400;
     private const uint PmNoRemove = 0x0000;
     private const uint WatchdogIntervalMs = 3_000;
+    // Зрелость отпускания проверяется чуть позже порога дребезга, чтобы таймер не сработал раньше.
+    private const uint ReleaseCommitDelayMs = PushToTalkTiming.ReleaseDebounceMs + 10;
 
     /// <summary>Windows drops a hook whose callback exceeds LowLevelHooksTimeout (300 ms by default).</summary>
     private const long CallbackBudgetMicroseconds = 1_000;
@@ -39,11 +41,16 @@ public sealed class MousePushToTalkService : IDisposable
     private nint _hook;
     private uint _threadId;
     private nuint _watchdogTimerId;
+    private nuint _releaseTimerId;
+    private readonly ButtonDebounce _debounce = new();
+    private readonly PushToTalkEventTrace _trace = new();
+    private bool _traceRequested;
+    private int _suspectStreak;
+    private long _syntheticMoves;
     private long _lastHookTick;
     private long _watchdogWindowStart;
     private long _worstCallbackMicroseconds;
     private Point _lastWatchdogCursor;
-    private bool _isHeld;
     // True from a swallowed button-down until its matching button-up, so the pair is never split.
     private bool _swallowUp;
     private volatile bool _ignoredForGame;
@@ -80,8 +87,9 @@ public sealed class MousePushToTalkService : IDisposable
         AppLog.Write($"{ButtonName} push-to-talk hook installed on dedicated input thread");
     }
 
-    public event EventHandler? Pressed;
-    public event EventHandler? Released;
+    // Тип аргументов наследует EventArgs: подписчики с сигнатурой (object?, EventArgs) работают как раньше.
+    public event EventHandler<PushToTalkEventArgs>? Pressed;
+    public event EventHandler<PushToTalkEventArgs>? Released;
 
     private void RunHookLoop()
     {
@@ -142,6 +150,11 @@ public sealed class MousePushToTalkService : IDisposable
                 CheckHookHealth();
                 continue;
             }
+            if (message.Message == WmTimer && _releaseTimerId != 0 && message.WParam == _releaseTimerId)
+            {
+                OnReleaseTimer();
+                continue;
+            }
             TranslateMessage(ref message);
             DispatchMessage(ref message);
         }
@@ -151,6 +164,7 @@ public sealed class MousePushToTalkService : IDisposable
             KillTimer(0, _watchdogTimerId);
             _watchdogTimerId = 0;
         }
+        CancelReleaseTimer();
         _foreground?.Dispose();
         _foreground = null;
         if (_hook != 0)
@@ -177,9 +191,17 @@ public sealed class MousePushToTalkService : IDisposable
     }
 
     /// <summary>
-    /// If the cursor moved during the last window, the hook must have fired during it. When it
-    /// did not, Windows dropped the hook — which it does silently — and it has to be reinstalled.
+    /// Если курсор двигался за окно, хук обязан был получить события. Когда не получил — Windows
+    /// мог молча его снять, и хук нужно переустановить.
     /// </summary>
+    /// <remarks>
+    /// Сам по себе сдвиг курсора без событий хука ничего не доказывает: программные перемещения
+    /// (SetCursorPos из других приложений, игры, удалённые рабочие столы) не проходят через
+    /// низкоуровневый хук. В логах это давало десятки «hook stopped» без единого реально
+    /// удерживаемого нажатия. Поэтому сдвиг засчитывается, только если за окно было настоящее
+    /// пользовательское действие (GetLastInputInfo), а удерживаемая кнопка отпускается только
+    /// при подтверждении в двух окнах подряд и когда GetAsyncKeyState не видит её нажатой.
+    /// </remarks>
     private void CheckHookHealth()
     {
         if (_ignoredForGame)
@@ -194,8 +216,11 @@ public sealed class MousePushToTalkService : IDisposable
             AppLog.Write($"{ButtonName} hook callback peaked at {worst / 1000d:0.00} ms in the last window");
         }
 
+        FlushTrace("watchdog");
+
         var windowStart = _watchdogWindowStart;
-        _watchdogWindowStart = Environment.TickCount64;
+        var now = Environment.TickCount64;
+        _watchdogWindowStart = now;
         if (!GetCursorPos(out var cursor))
         {
             return;
@@ -206,37 +231,126 @@ public sealed class MousePushToTalkService : IDisposable
         var cursorMoved = cursor.X != previous.X || cursor.Y != previous.Y;
         if (!cursorMoved || Volatile.Read(ref _lastHookTick) >= windowStart)
         {
+            _suspectStreak = 0;
             return;
         }
 
-        AppLog.Write($"{ButtonName} hook stopped receiving events; reinstalling");
-
-        // Releasing a held trigger before anything else. The button-up that would have ended the
-        // dictation was delivered to a hook Windows had already removed, so without this the
-        // service stays convinced the button is down: recording never stops, and every later press
-        // is ignored because it looks like a repeat. The same happens on Alt-Tab into a game with
-        // the side button held, since the game check only runs on press.
-        if (_isHeld)
+        if (!HadRealInputSince(windowStart, now))
         {
-            _isHeld = false;
+            // Курсор сдвинут программно: хук тут ни при чём.
+            _syntheticMoves++;
+            _suspectStreak = 0;
+            return;
+        }
+
+        var held = _debounce.IsHeld;
+        _suspectStreak++;
+        if (held && _suspectStreak < 2)
+        {
+            return; // держим: ждём подтверждения следующим окном, не рискуем ложным отпусканием
+        }
+
+        AppLog.Write($"{ButtonName} hook stopped receiving events (input without hook events, " +
+                     $"synthetic cursor moves ignored so far: {_syntheticMoves}); reinstalling");
+        FlushTrace("hook-suspect");
+        _suspectStreak = 0;
+
+        // Потерянное отпускание: кнопку отпустили, пока хук был снят. Отпускаем, только если
+        // система тоже не видит кнопку нажатой — настоящее удержание не прерываем никогда.
+        if (held && !IsPhysicallyDown())
+        {
             AppLog.Write($"{ButtonName} was still held when the hook died; releasing");
-            Raise(Released);
+            CancelReleaseTimer();
+            if (_debounce.ForceRelease(Stopwatch.GetTimestamp(), out var args))
+            {
+                _swallowUp = false;
+                FinishRelease(args);
+            }
         }
 
-        if (_hook != 0)
-        {
-            UnhookWindowsHookEx(_hook);
-            _hook = 0;
-        }
-
-        _hook = SetWindowsHookEx(WhMouseLl, _callback!, GetModuleHandle(null), 0);
-        if (_hook == 0)
+        // Новый хук ставится до снятия старого, чтобы не было окна без хука.
+        var replacement = SetWindowsHookEx(WhMouseLl, _callback!, GetModuleHandle(null), 0);
+        if (replacement == 0)
         {
             AppLog.Write($"{ButtonName} hook reinstall failed", new Win32Exception(Marshal.GetLastWin32Error()));
             return;
         }
 
+        var old = _hook;
+        _hook = replacement;
+        if (old != 0)
+        {
+            UnhookWindowsHookEx(old);
+        }
+
         Volatile.Write(ref _lastHookTick, Environment.TickCount64);
+    }
+
+    /// <summary>Было ли за окно настоящее действие пользователя (мышь или клавиатура).</summary>
+    private static bool HadRealInputSince(long windowStartTick, long nowTick)
+    {
+        var info = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+        if (!GetLastInputInfo(ref info))
+        {
+            return true; // не знаем — прежнее поведение: считаем подозрительным
+        }
+
+        var ageMs = unchecked((uint)Environment.TickCount - info.Time);
+        return nowTick - ageMs >= windowStartTick;
+    }
+
+    private bool IsPhysicallyDown() =>
+        (GetAsyncKeyState(_button == MouseSideButton.Mouse5 ? VkXButton2 : VkXButton1) & 0x8000) != 0;
+
+    private void FlushTrace(string reason)
+    {
+        if (!_traceRequested && reason == "watchdog")
+        {
+            return;
+        }
+
+        _traceRequested = false;
+        AppLog.Write($"{ButtonName} xbutton trace [{reason}]: {_trace.Format()}");
+    }
+
+    private void OnReleaseTimer()
+    {
+        CancelReleaseTimer();
+        var now = Stopwatch.GetTimestamp();
+        if (_debounce.TryCommitRelease(now, out var args))
+        {
+            FinishRelease(args);
+        }
+        else if (_debounce.ReleasePending)
+        {
+            ArmReleaseTimer(); // таймер сработал раньше порога
+        }
+    }
+
+    private void ArmReleaseTimer()
+    {
+        if (_releaseTimerId == 0)
+        {
+            _releaseTimerId = SetTimer(0, 0, ReleaseCommitDelayMs, 0);
+        }
+    }
+
+    private void CancelReleaseTimer()
+    {
+        if (_releaseTimerId != 0)
+        {
+            KillTimer(0, _releaseTimerId);
+            _releaseTimerId = 0;
+        }
+    }
+
+    private void FinishRelease(PushToTalkEventArgs args)
+    {
+        if (args.IsShortTap)
+        {
+            _traceRequested = true;
+        }
+        Raise(Released, args);
     }
 
     private nint HookCallback(int code, nint message, nint data)
@@ -285,42 +399,10 @@ public sealed class MousePushToTalkService : IDisposable
                 var input = Marshal.PtrToStructure<MsllHookStruct>(data);
                 if (MatchesButton(input.MouseData, _button))
                 {
-                    if (message == WmXButtonDown && !_isHeld)
-                    {
-                        // A cached read, not a process walk: the foreground monitor keeps this
-                        // answer current on its own schedule.
-                        if (_foreground?.ForegroundIsGame == true)
-                        {
-                            // Logging is file I/O under a global lock. It must not happen here:
-                            // this callback is budgeted against LowLevelHooksTimeout. Record the
-                            // fact and let the watchdog tick write it out.
-                            _ignoredForGame = true;
-                        }
-                        else
-                        {
-                            _isHeld = true;
-                            _swallowUp = true;
-                            swallow = true;
-                            Raise(Pressed);
-                        }
-                    }
-                    else if (message == WmXButtonDown && _swallowUp)
-                    {
-                        swallow = true; // auto-repeat while held
-                    }
-                    else if (message == WmXButtonUp)
-                    {
-                        if (_isHeld)
-                        {
-                            _isHeld = false;
-                            Raise(Released);
-                        }
-                        if (_swallowUp)
-                        {
-                            _swallowUp = false;
-                            swallow = true;
-                        }
-                    }
+                    // Отметка берётся первым делом: потребителю нужен момент нажатия, а не момент,
+                    // когда UI дошёл до обработчика.
+                    var timestamp = Stopwatch.GetTimestamp();
+                    swallow = message == WmXButtonDown ? HandleDown(timestamp) : HandleUp(timestamp);
                 }
             }
             catch
@@ -339,11 +421,65 @@ public sealed class MousePushToTalkService : IDisposable
         return CallNextHookEx(_hook, code, message, data);
     }
 
+    private bool HandleDown(long timestamp)
+    {
+        // Созревшее, но не подтверждённое таймером отпускание фиксируем до разбора нового нажатия.
+        if (_debounce.TryCommitRelease(timestamp, out var committed))
+        {
+            CancelReleaseTimer();
+            FinishRelease(committed);
+        }
+
+        if (!_debounce.IsHeld && _foreground?.ForegroundIsGame == true)
+        {
+            // Logging is file I/O under a global lock. It must not happen here:
+            // this callback is budgeted against LowLevelHooksTimeout. Record the
+            // fact and let the watchdog tick write it out.
+            _ignoredForGame = true;
+            return false;
+        }
+
+        switch (_debounce.OnDown(timestamp))
+        {
+            case DebounceDownResult.Press:
+                _trace.Add(timestamp, 'D');
+                _swallowUp = true;
+                Raise(Pressed, new PushToTalkEventArgs(timestamp, 0));
+                return true;
+            case DebounceDownResult.Bounce:
+                // Дребезг: отпускание не состоялось, запись продолжается как удерживаемая.
+                CancelReleaseTimer();
+                _trace.Add(timestamp, 'B');
+                _traceRequested = true;
+                _swallowUp = true;
+                return true;
+            default:
+                _trace.Add(timestamp, 'R');
+                return _swallowUp; // auto-repeat while held
+        }
+    }
+
+    private bool HandleUp(long timestamp)
+    {
+        if (_debounce.OnUp(timestamp))
+        {
+            _trace.Add(timestamp, 'U');
+            ArmReleaseTimer();
+        }
+
+        if (_swallowUp)
+        {
+            _swallowUp = false;
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Handlers touch WPF, so they are posted to the UI dispatcher. The post is asynchronous on
     /// purpose — the callback must return long before LowLevelHooksTimeout.
     /// </summary>
-    private void Raise(EventHandler? handler)
+    private void Raise(EventHandler<PushToTalkEventArgs>? handler, PushToTalkEventArgs args)
     {
         if (handler is null)
         {
@@ -352,11 +488,11 @@ public sealed class MousePushToTalkService : IDisposable
 
         if (_dispatcher is null)
         {
-            handler(this, EventArgs.Empty);
+            handler(this, args);
             return;
         }
 
-        _dispatcher.BeginInvoke(DispatcherPriority.Send, () => handler(this, EventArgs.Empty));
+        _dispatcher.BeginInvoke(DispatcherPriority.Send, () => handler(this, args));
     }
 
     internal static ushort HighWord(uint value) => (ushort)(value >> 16);
@@ -373,7 +509,6 @@ public sealed class MousePushToTalkService : IDisposable
         }
 
         _disposed = true;
-        _isHeld = false;
         var stopped = RequestLoopExit();
         if (!stopped)
         {
@@ -413,6 +548,9 @@ public sealed class MousePushToTalkService : IDisposable
         return !_thread.IsAlive;
     }
 
+    private const int VkXButton1 = 0x05;
+    private const int VkXButton2 = 0x06;
+
     private delegate nint LowLevelMouseProc(int code, nint message, nint data);
 
     [StructLayout(LayoutKind.Sequential)]
@@ -430,6 +568,13 @@ public sealed class MousePushToTalkService : IDisposable
         public uint Flags;
         public uint Time;
         public nuint ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LastInputInfo
+    {
+        public uint Size;
+        public uint Time;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -492,6 +637,13 @@ public sealed class MousePushToTalkService : IDisposable
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool KillTimer(nint window, nuint timerId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetLastInputInfo(ref LastInputInfo info);
+
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int virtualKey);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
