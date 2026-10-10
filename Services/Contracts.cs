@@ -42,6 +42,16 @@ public interface IAudioCaptureService : IDisposable
 
     void Start();
     Task<AudioCaptureResult> StopAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// То же, но начало записи привязано к моменту нажатия (Stopwatch.GetTimestamp). Реализации без
+    /// таймстемпов по умолчанию игнорируют момент и работают как Start().
+    /// </summary>
+    void Start(long pressTimestamp) => Start();
+
+    /// <summary>То же, но хвост отсчитывается от момента отпускания (Stopwatch.GetTimestamp).</summary>
+    Task<AudioCaptureResult> StopAsync(long releaseTimestamp, CancellationToken cancellationToken) =>
+        StopAsync(cancellationToken);
     Task<string?> CancelAsync();
 }
 

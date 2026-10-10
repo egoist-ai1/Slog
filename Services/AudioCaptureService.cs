@@ -16,16 +16,30 @@ public sealed class AudioCaptureService : IAudioCaptureService
 {
     internal const int OutputSampleRate = 16_000;
     internal const int ConversionBlockSamples = 16_384;
-    // Preserve a quiet short word that starts just before the push-to-talk trigger. The extra
-    // 120 ms costs only about 46 KiB even for 48 kHz stereo float capture and adds no
-    // release-to-text latency because the WASAPI stream remains continuously warm.
-    internal static readonly TimeSpan PreRollDuration = TimeSpan.FromMilliseconds(320);
-    internal static readonly TimeSpan ReleaseTailDuration = TimeSpan.FromMilliseconds(350);
+    internal const int CaptureBufferMilliseconds = 20;
+    // Кольцо тёплого захвата с отметками времени: начало записи берётся не «сейчас», а с момента
+    // нажатия минус PreRollDuration. 2 с для 48 кГц stereo float — около 750 KiB, звук лежит
+    // только в памяти и не живёт при паузе.
+    internal static readonly TimeSpan RingDuration = TimeSpan.FromSeconds(2);
+    // Русские слова начинаются с шипящих и взрывных, которые тихие и лежат раньше нажатия
+    // (реакция на кнопку + задержка хоткея), поэтому 500 мс вместо прежних 320.
+    internal static readonly TimeSpan PreRollDuration = TimeSpan.FromMilliseconds(500);
+    // Адаптивный хвост после отпускания: минимум от момента отпускания, дальше пишем, пока не
+    // накопится ReleaseTailSilence тишины, но не дольше ReleaseTailMaximum.
+    internal static readonly TimeSpan ReleaseTailMinimum = TimeSpan.FromMilliseconds(250);
+    internal static readonly TimeSpan ReleaseTailSilence = TimeSpan.FromMilliseconds(200);
+    internal static readonly TimeSpan ReleaseTailMaximum = TimeSpan.FromMilliseconds(900);
+    // Порог тишины: и общий RMS, и энергия верхних частот (затухающее «с/ш/щ») не выше
+    // оценки шума на это число дБ.
+    internal static readonly double SilenceMarginDb = 5;
+    // Запас реального времени сверх ReleaseTailMaximum, если устройство перестало отдавать буферы.
+    internal static readonly TimeSpan ReleaseTailStallGrace = TimeSpan.FromMilliseconds(300);
 
     private readonly object _sync = new();
     // Never held while joining a capture thread. Audio callbacks acquire only _sync.
     private readonly object _lifecycleSync = new();
     private readonly Func<string?, AudioCaptureEndpoint> _captureFactory;
+    private readonly Func<long> _clock;
     private readonly HashSet<Task> _pendingDisposals = [];
     // Reused per thread; nested synchronous observers may enter another service callback.
     [ThreadStatic] private static List<AudioCaptureService>? _callbackOwners;
@@ -53,6 +67,15 @@ public sealed class AudioCaptureService : IAudioCaptureService
     private float _smoothedMid;
     private float _smoothedTreble;
     private long _feedbackSuppressedUntilTimestamp;
+    // Оценка шума (дБ): падает мгновенно, растёт только вне записи, чтобы речь не поднимала порог.
+    private double? _noiseFloorDb;
+    private double? _trebleFloorDb;
+    private TaskCompletionSource? _tailWait;
+    private long _tailRelease;
+    // Буфер прежнего эндпоинта, сохранённый при перезапуске на то же устройство.
+    private CaptureSessionBuffer? _retainedBuffer;
+    private string? _retainedDeviceId;
+    private WaveFormat? _retainedFormat;
 
     public event EventHandler<float>? LevelChanged;
     public event EventHandler<VoiceTimbreLevel>? TimbreChanged;
@@ -78,9 +101,11 @@ public sealed class AudioCaptureService : IAudioCaptureService
         bool persistCompletedTake,
         string? captureDeviceId,
         bool startPaused,
-        Func<string?, AudioCaptureEndpoint>? captureFactory = null)
+        Func<string?, AudioCaptureEndpoint>? captureFactory = null,
+        Func<long>? timestampProvider = null)
     {
         _captureFactory = captureFactory ?? OpenWasapiCapture;
+        _clock = timestampProvider ?? System.Diagnostics.Stopwatch.GetTimestamp;
         _deviceCatalog = deviceCatalog;
         _ownsDeviceCatalog = ownsDeviceCatalog;
         _persistCompletedTake = persistCompletedTake;
@@ -156,8 +181,8 @@ public sealed class AudioCaptureService : IAudioCaptureService
                     && (_paused && !_resumeWhenAvailable || _capture is not null
                         && string.Equals(_activeDeviceId, expected, StringComparison.Ordinal))) return;
                 cancelled = _buffer?.IsSessionActive == true;
-                DiscardSessionLocked(clearPreRoll: true);
-                retired = DetachCaptureLocked();
+                DiscardSessionLocked();
+                retired = DetachCaptureLocked(retainPreRoll: true);
                 _selectedDeviceId = normalized;
                 if (_resumeWhenAvailable) _paused = false;
                 _resumeWhenAvailable = false;
@@ -251,8 +276,17 @@ public sealed class AudioCaptureService : IAudioCaptureService
         RaiseStateChanged(change, generation);
     }
 
-    public void Start()
+    public void Start() => StartCore(null);
+
+    /// <summary>
+    /// Запись начинается с <paramref name="pressTimestamp"/> (Stopwatch.GetTimestamp момента нажатия)
+    /// минус PreRollDuration, но не раньше конца предыдущей записи.
+    /// </summary>
+    public void Start(long pressTimestamp) => StartCore(pressTimestamp);
+
+    private void StartCore(long? pressTimestamp)
     {
+        var press = pressTimestamp ?? _clock();
         PendingDisposal? retired = null;
         PendingDisposal? failedStart = null;
         AudioCaptureStateChangedEventArgs? change = null;
@@ -295,8 +329,8 @@ public sealed class AudioCaptureService : IAudioCaptureService
                         if (_paused || _capture is not null
                             && !string.Equals(expected, _activeDeviceId, StringComparison.Ordinal))
                         {
-                            DiscardSessionLocked(clearPreRoll: true);
-                            retired = DetachCaptureLocked();
+                            DiscardSessionLocked();
+                            retired = DetachCaptureLocked(retainPreRoll: !_paused);
                             ++_lifecycleGeneration;
                         }
                         _paused = false;
@@ -341,7 +375,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
                     var format = _captureFormat ?? throw new InvalidOperationException("Формат микрофона не определён.");
                     _spectrum.Reset();
                     (_buffer ?? throw new InvalidOperationException("Буфер микрофона не создан."))
-                        .Begin(Math.Max(format.AverageBytesPerSecond * 2, 4096));
+                        .Begin(Math.Max(format.AverageBytesPerSecond * 2, 4096), press, PreRollDuration);
                     ++_sessionGeneration;
                     _stopRequested = false;
                     _smoothedLevel = 0;
@@ -359,9 +393,9 @@ public sealed class AudioCaptureService : IAudioCaptureService
     }
 
     /// <summary>
-    /// Clears warm/session audio already exposed to a cue and drops callback buffers until its
-    /// bounded acoustic tail has elapsed. Capture remains active, so UI and hotkey latency do not
-    /// wait for speaker playback, but cue samples cannot enter the accepted ASR window.
+    /// Заменяет нулями содержимое буферов, пришедших до конца акустического хвоста сигнала.
+    /// Длина и отметки времени сохраняются, поэтому хронология кольца не рвётся, а звук сигнала
+    /// не попадает в принятое окно ASR. Захват остаётся активным: задержки UI и хоткея нет.
     /// </summary>
     public void SuppressFeedbackAudio(TimeSpan duration)
     {
@@ -375,7 +409,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
             // Bound feedback acoustic suppression to the actual sound tone duration (max 40 ms)
             // so human speech is never clipped or delayed.
             var effectiveMs = Math.Min(duration.TotalMilliseconds, 40d);
-            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var now = _clock();
             var deadline = now + (long)Math.Ceiling(
                 effectiveMs / 1000d * System.Diagnostics.Stopwatch.Frequency);
             _feedbackSuppressedUntilTimestamp = Math.Max(_feedbackSuppressedUntilTimestamp, deadline);
@@ -383,9 +417,21 @@ public sealed class AudioCaptureService : IAudioCaptureService
         }
     }
 
-    public async Task<AudioCaptureResult> StopAsync(CancellationToken cancellationToken)
+    public Task<AudioCaptureResult> StopAsync(CancellationToken cancellationToken) =>
+        StopCoreAsync(null, cancellationToken);
+
+    /// <summary>
+    /// Хвост отсчитывается от <paramref name="releaseTimestamp"/> (Stopwatch.GetTimestamp момента
+    /// отпускания), а не от момента вызова.
+    /// </summary>
+    public Task<AudioCaptureResult> StopAsync(long releaseTimestamp, CancellationToken cancellationToken) =>
+        StopCoreAsync(releaseTimestamp, cancellationToken);
+
+    private async Task<AudioCaptureResult> StopCoreAsync(long? releaseTimestamp, CancellationToken cancellationToken)
     {
         long generation;
+        TaskCompletionSource tailWait;
+        TimeSpan fallback;
         lock (_sync)
         {
             if (_buffer?.IsSessionActive != true)
@@ -398,13 +444,22 @@ public sealed class AudioCaptureService : IAudioCaptureService
             }
             _stopRequested = true;
             generation = _sessionGeneration;
+            _tailRelease = releaseTimestamp ?? _clock();
+            tailWait = _tailWait = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            // Данные после отпускания могли прийти ещё до вызова: проверяем сразу.
+            CheckTailLocked();
+            var elapsed = TimeSpan.FromSeconds(Math.Max(0, _clock() - _tailRelease)
+                / (double)System.Diagnostics.Stopwatch.Frequency);
+            fallback = (ReleaseTailMaximum > elapsed ? ReleaseTailMaximum - elapsed : TimeSpan.Zero)
+                + ReleaseTailStallGrace;
         }
 
         try
         {
-            // Preserve the release consonant/ending. WASAPI remains warm afterwards, so the next
-            // trigger does not reopen the device or pay the first-buffer latency.
-            await Task.Delay(ReleaseTailDuration, cancellationToken).ConfigureAwait(false);
+            // Сохраняем окончание слова/согласный: ждём минимум хвоста и тишину (см. CheckTailLocked).
+            // WASAPI остаётся тёплым, поэтому следующее нажатие не переоткрывает устройство.
+            try { await tailWait.Task.WaitAsync(fallback, cancellationToken).ConfigureAwait(false); }
+            catch (TimeoutException) { /* устройство замолчало: берём то, что есть */ }
 
             CapturedPcm completed;
             WaveFormat format;
@@ -419,6 +474,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
                 format = _captureFormat ?? throw new InvalidOperationException("Формат микрофона потерян.");
                 completed = (_buffer ?? throw new OperationCanceledException(cancellationToken)).Complete();
                 _stopRequested = false;
+                _tailWait = null;
             }
 
             var preRollBytes = completed.PreRollBytes;
@@ -497,14 +553,15 @@ public sealed class AudioCaptureService : IAudioCaptureService
             var capture = endpoint.Capture;
             var format = capture.WaveFormat;
             var preRollBytes = AlignToBlock(
-                (int)Math.Ceiling(format.AverageBytesPerSecond * PreRollDuration.TotalSeconds), format.BlockAlign);
+                (int)Math.Ceiling(format.AverageBytesPerSecond * RingDuration.TotalSeconds), format.BlockAlign);
             lock (_sync)
             {
                 ObjectDisposedException.ThrowIf(_disposed, this);
                 if (_paused || generation != _lifecycleGeneration)
                     throw new OperationCanceledException("Состояние микрофона изменилось во время запуска.");
                 _captureFormat = format;
-                _buffer = new CaptureSessionBuffer(preRollBytes, format.BlockAlign, format);
+                _buffer = TakeRetainedBuffer(endpoint.DeviceId, format)
+                    ?? new CaptureSessionBuffer(preRollBytes, format.BlockAlign, format);
                 capture.DataAvailable += OnDataAvailable;
                 capture.RecordingStopped += OnRecordingStopped;
                 _capture = capture;
@@ -562,7 +619,10 @@ public sealed class AudioCaptureService : IAudioCaptureService
         var device = _deviceCatalog.OpenCaptureDevice(selectedDeviceId);
         try
         {
-            return new(new WasapiCapture(device) { ShareMode = AudioClientShareMode.Shared }, device, device.ID);
+            // Событийная синхронизация и короткий буфер: по умолчанию NAudio опрашивает раз в
+            // 100 мс, из-за чего после отпускания в запись попадало лишь ~250-300 мс хвоста.
+            return new(new WasapiCapture(device, true, CaptureBufferMilliseconds)
+                { ShareMode = AudioClientShareMode.Shared }, device, device.ID);
         }
         catch
         {
@@ -583,6 +643,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
     {
         WaveFormat? format;
         bool measureSpectrum;
+        long timestamp;
         lock (_sync)
         {
             // Unsubscribing cannot retract a callback that was already queued by the old WASAPI
@@ -592,19 +653,32 @@ public sealed class AudioCaptureService : IAudioCaptureService
             {
                 return;
             }
-            if (System.Diagnostics.Stopwatch.GetTimestamp() < _feedbackSuppressedUntilTimestamp)
+            timestamp = _clock();
+            if (timestamp < _feedbackSuppressedUntilTimestamp)
             {
+                // Буфер не выбрасываем: кладём нули той же длины с той же отметкой времени.
+                AppendSilenceLocked(args.BytesRecorded, timestamp);
                 return;
             }
             format = _captureFormat;
             measureSpectrum = _buffer?.IsSessionActive == true;
-            _buffer?.Append(args.Buffer.AsSpan(0, args.BytesRecorded));
         }
 
-        if (format is null || !PcmLevelMeter.TryMeasureTimbre(
+        double rms = 0, peak = 0, rawBass = 0, rawMid = 0, rawTreble = 0;
+        var measured = format is not null && PcmLevelMeter.TryMeasureTimbre(
             args.Buffer, args.BytesRecorded, format,
-            out var rms, out var peak,
-            out var rawBass, out var rawMid, out var rawTreble))
+            out rms, out peak, out rawBass, out rawMid, out rawTreble);
+        lock (_sync)
+        {
+            if (!IsCurrentCaptureCallback(sender, _capture, _disposed, args.BytesRecorded))
+            {
+                return;
+            }
+            var silent = measured && ClassifyChunkLocked(rms, rawTreble);
+            _buffer?.Append(args.Buffer.AsSpan(0, args.BytesRecorded), timestamp, silent);
+            CheckTailLocked();
+        }
+        if (!measured)
         {
             return;
         }
@@ -651,6 +725,73 @@ public sealed class AudioCaptureService : IAudioCaptureService
             // A UI observer must never terminate the WASAPI callback thread.
             AppLog.Write("Microphone level subscriber threw", exception);
         }
+    }
+
+    // Нули вместо звука: нейтральны для PCM-16/24/32 и float; метка «тишина» для адаптивного хвоста.
+    private void AppendSilenceLocked(int bytesRecorded, long timestamp)
+    {
+        if (_buffer is null) return;
+        var zeros = ArrayPool<byte>.Shared.Rent(bytesRecorded);
+        try
+        {
+            Array.Clear(zeros, 0, bytesRecorded);
+            _buffer.Append(zeros.AsSpan(0, bytesRecorded), timestamp, silent: true);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(zeros);
+        }
+        _smoothedLevel = 0;
+        CheckTailLocked();
+    }
+
+    // Тишина = и RMS, и верхние частоты (шипящие затухают последними) не выше шума + SilenceMarginDb.
+    private bool ClassifyChunkLocked(double rms, double treble)
+    {
+        var sessionActive = _buffer?.IsSessionActive == true;
+        var rmsDb = Math.Max(20 * Math.Log10(Math.Max(rms, 0.000001)), MinFloorDb);
+        var trebleDb = Math.Max(20 * Math.Log10(Math.Max(treble, 0.000001)), MinFloorDb);
+        _noiseFloorDb = TrackFloor(_noiseFloorDb, rmsDb, sessionActive);
+        _trebleFloorDb = TrackFloor(_trebleFloorDb, trebleDb, sessionActive);
+        return IsSilent(rmsDb, _noiseFloorDb!.Value, trebleDb, _trebleFloorDb!.Value);
+    }
+
+    internal const double MinFloorDb = -90;
+
+    internal static double TrackFloor(double? floor, double levelDb, bool sessionActive)
+    {
+        if (floor is not { } current) return levelDb;
+        if (levelDb < current) return levelDb;
+        // Растёт медленно и только вне записи (постоянная времени ~1 с на буферах по 20 мс).
+        return sessionActive ? current : current + ((levelDb - current) * 0.02);
+    }
+
+    internal static bool IsSilent(double rmsDb, double rmsFloorDb, double trebleDb, double trebleFloorDb) =>
+        rmsDb < rmsFloorDb + SilenceMarginDb && trebleDb < trebleFloorDb + SilenceMarginDb;
+
+    // Завершает ожидание хвоста: прошёл минимум от отпускания и накоплена тишина, либо достигнут максимум.
+    private void CheckTailLocked()
+    {
+        if (_tailWait is { } wait && _buffer is { IsSessionActive: true } buffer
+            && buffer.IsTailComplete(_tailRelease, ReleaseTailMinimum, ReleaseTailSilence, ReleaseTailMaximum))
+        {
+            wait.TrySetResult();
+        }
+    }
+
+    private CaptureSessionBuffer? TakeRetainedBuffer(string deviceId, WaveFormat format)
+    {
+        var buffer = _retainedBuffer;
+        var reuse = buffer is not null && string.Equals(_retainedDeviceId, deviceId, StringComparison.Ordinal)
+            && _retainedFormat is { } previous && previous.Encoding == format.Encoding
+            && previous.SampleRate == format.SampleRate && previous.Channels == format.Channels
+            && previous.BitsPerSample == format.BitsPerSample;
+        _retainedBuffer = null;
+        _retainedDeviceId = null;
+        _retainedFormat = null;
+        if (reuse) return buffer;
+        buffer?.Clear();
+        return null;
     }
 
     internal static bool IsCurrentCaptureCallback(
@@ -731,8 +872,8 @@ public sealed class AudioCaptureService : IAudioCaptureService
                     _paused = false;
                     _monitoringFailure = null;
                     _lastRecoveryDeviceId = expected;
-                    DiscardSessionLocked(clearPreRoll: true);
-                    retired = DetachCaptureLocked();
+                    DiscardSessionLocked();
+                    retired = DetachCaptureLocked(retainPreRoll: true);
                     ++_lifecycleGeneration;
                     restart = true;
                     change = new(GetStateLocked(devices), recovering ? AudioCaptureChangeKind.Resumed
@@ -831,7 +972,7 @@ public sealed class AudioCaptureService : IAudioCaptureService
         // Pre-roll can contain the very first word we intentionally preserved. Use the quieter
         // boundary as background evidence so that word cannot raise its own acceptance threshold.
         // This only calibrates session acceptance; every original sample still reaches ASR.
-        var tailSamples = Math.Min(samples.Length, (int)(ReleaseTailDuration.TotalSeconds * OutputSampleRate));
+        var tailSamples = Math.Min(samples.Length, (int)(ReleaseTailMinimum.TotalSeconds * OutputSampleRate));
         var tailFloor = AudioSignalAnalyzer.EstimateNoiseFloorDb(samples.AsSpan(samples.Length - tailSamples), OutputSampleRate);
         if (tailFloor is { } tail && (noiseFloor is null || tail < noiseFloor.Value))
         {
@@ -974,6 +1115,9 @@ public sealed class AudioCaptureService : IAudioCaptureService
             _buffer?.Clear();
         }
         _stopRequested = false;
+        // StopAsync проснётся и увидит смену поколения.
+        _tailWait?.TrySetResult();
+        _tailWait = null;
     }
 
     private sealed record PendingDisposal(Action Dispose, TaskCompletionSource Completion);
@@ -985,10 +1129,11 @@ public sealed class AudioCaptureService : IAudioCaptureService
         return new(dispose, completion);
     }
 
-    private PendingDisposal? DetachCaptureLocked()
+    private PendingDisposal? DetachCaptureLocked(bool retainPreRoll = false)
     {
         if (_capture is null) return null;
         var endpoint = new AudioCaptureEndpoint(_capture, _captureDevice, _activeDeviceId ?? string.Empty);
+        var oldFormat = _captureFormat;
         // Reserve completion while ownership is still protected: a concurrent ordinary Dispose
         // must see even retirement that has not yet been scheduled by the source callback.
         var retired = RegisterDisposalLocked(() => DisposeEndpoint(endpoint));
@@ -999,7 +1144,22 @@ public sealed class AudioCaptureService : IAudioCaptureService
         _activeDeviceId = null;
         _captureFormat = null;
         ++_sessionGeneration;
-        _buffer?.Clear();
+        // Перезапуск на то же устройство не должен терять кольцо: оно переиспользуется, если
+        // идентификатор и формат совпадут (иначе TakeRetainedBuffer очистит его).
+        _retainedBuffer?.Clear();
+        _retainedBuffer = null;
+        _retainedFormat = null;
+        _retainedDeviceId = null;
+        if (retainPreRoll && _buffer is not null)
+        {
+            _retainedBuffer = _buffer;
+            _retainedDeviceId = endpoint.DeviceId;
+            _retainedFormat = oldFormat;
+        }
+        else
+        {
+            _buffer?.Clear();
+        }
         _buffer = null;
         return retired;
     }
@@ -1055,6 +1215,8 @@ public sealed class AudioCaptureService : IAudioCaptureService
                     _deviceCatalog.DevicesChanged -= OnDevicesChanged;
                     DiscardSessionLocked(clearPreRoll: true);
                     retired = DetachCaptureLocked();
+                    _retainedBuffer?.Clear();
+                    _retainedBuffer = null;
                 }
                 if (_ownsDeviceCatalog && !_catalogDisposalStarted)
                 {
@@ -1112,26 +1274,83 @@ internal sealed class CaptureSessionBuffer
 {
     private readonly PcmByteRingBuffer _preRoll;
     private readonly WaveFormat? _format;
+    private readonly Queue<ChunkMark> _marks = new();
+    private readonly int _blockAlign;
+    private readonly int _bytesPerSecond;
     private StreamingCaptureConverter? _converter;
     private MemoryStream? _session;
     private int _sessionPreRollBytes;
+    // Абсолютная позиция конца последней завершённой записи: следующая не заходит раньше неё.
+    private long _lastSessionEnd;
+
+    // Отметка одного колбэка: диапазон байтов кольца и момент его прихода.
+    private readonly record struct ChunkMark(long StartOffset, long EndOffset, long StartTimestamp, long EndTimestamp, bool Silent);
 
     internal CaptureSessionBuffer(int preRollCapacity, int blockAlign, WaveFormat? format = null)
     {
         _preRoll = new PcmByteRingBuffer(preRollCapacity, blockAlign);
         _format = format;
+        _blockAlign = Math.Max(1, blockAlign);
+        _bytesPerSecond = format?.AverageBytesPerSecond ?? 0;
     }
 
     internal bool IsSessionActive => _session is not null || _converter is not null;
     internal long RetainedSampleBytes => _converter?.RetainedSampleBytes ?? _session?.Length ?? 0;
 
-    internal void Begin(int initialCapacity)
+    internal void Begin(int initialCapacity) => BeginFrom(initialCapacity, _preRoll.OldestOffset);
+
+    /// <summary>
+    /// Начало записи — pressTimestamp минус preRoll, но не раньше конца предыдущей записи и не
+    /// раньше самого старого байта кольца.
+    /// </summary>
+    internal void Begin(int initialCapacity, long pressTimestamp, TimeSpan preRoll)
+    {
+        var from = pressTimestamp - (long)(preRoll.TotalSeconds * System.Diagnostics.Stopwatch.Frequency);
+        BeginFrom(initialCapacity, Math.Max(OffsetAt(from), _lastSessionEnd));
+    }
+
+    // Байтовая позиция кольца, соответствующая моменту времени (с интерполяцией внутри колбэка).
+    private long OffsetAt(long timestamp)
+    {
+        foreach (var mark in _marks)
+        {
+            if (timestamp >= mark.EndTimestamp) continue;
+            if (timestamp <= mark.StartTimestamp || _bytesPerSecond <= 0) return mark.StartOffset;
+            var bytes = (long)((timestamp - mark.StartTimestamp)
+                * (double)_bytesPerSecond / System.Diagnostics.Stopwatch.Frequency);
+            return Math.Min(mark.EndOffset, mark.StartOffset + (bytes - (bytes % _blockAlign)));
+        }
+        return _preRoll.TotalWritten;
+    }
+
+    /// <summary>
+    /// Хвост закончен: от последнего данных прошло не меньше minimum после отпускания и подряд
+    /// накоплено не меньше silence тишины, либо прошёл maximum.
+    /// </summary>
+    internal bool IsTailComplete(long releaseTimestamp, TimeSpan minimum, TimeSpan silence, TimeSpan maximum)
+    {
+        if (_marks.Count == 0) return false;
+        var frequency = (double)System.Diagnostics.Stopwatch.Frequency;
+        var elapsed = (_marks.Last().EndTimestamp - releaseTimestamp) / frequency;
+        if (elapsed >= maximum.TotalSeconds) return true;
+        if (elapsed < minimum.TotalSeconds) return false;
+        long silent = 0;
+        foreach (var mark in _marks)
+        {
+            // Колбэк, начавшийся до отпускания, содержит ещё голос: в тишину не засчитываем.
+            if (mark.StartTimestamp < releaseTimestamp) continue;
+            silent = mark.Silent ? silent + (mark.EndTimestamp - mark.StartTimestamp) : 0;
+        }
+        return silent / frequency >= silence.TotalSeconds;
+    }
+
+    private void BeginFrom(int initialCapacity, long fromOffset)
     {
         if (IsSessionActive)
         {
             throw new InvalidOperationException("Session already active.");
         }
-        var prefix = _preRoll.Snapshot();
+        var prefix = _preRoll.Snapshot(fromOffset);
         try
         {
             if (_format is not null)
@@ -1152,11 +1371,23 @@ internal sealed class CaptureSessionBuffer
         }
     }
 
-    internal void Append(ReadOnlySpan<byte> bytes)
+    internal void Append(ReadOnlySpan<byte> bytes) =>
+        Append(bytes, System.Diagnostics.Stopwatch.GetTimestamp(), silent: false);
+
+    internal void Append(ReadOnlySpan<byte> bytes, long endTimestamp, bool silent)
     {
         _session?.Write(bytes);
         _converter?.Append(bytes);
+        var start = _preRoll.TotalWritten;
         _preRoll.Write(bytes);
+        var written = _preRoll.TotalWritten - start;
+        if (written > 0)
+        {
+            var duration = _bytesPerSecond > 0
+                ? (long)(written * (double)System.Diagnostics.Stopwatch.Frequency / _bytesPerSecond) : 0;
+            _marks.Enqueue(new(start, start + written, endTimestamp - duration, endTimestamp, silent));
+        }
+        while (_marks.Count > 0 && _marks.Peek().EndOffset <= _preRoll.OldestOffset) _marks.Dequeue();
     }
 
     internal CapturedPcm Complete()
@@ -1166,12 +1397,14 @@ internal sealed class CaptureSessionBuffer
             var completed = new CapturedPcm(converter, _sessionPreRollBytes);
             _converter = null;
             _sessionPreRollBytes = 0;
+            _lastSessionEnd = _preRoll.TotalWritten;
             return completed;
         }
         var session = _session ?? throw new InvalidOperationException("Session is not active.");
         var result = new CapturedPcm(session.GetBuffer(), checked((int)session.Length), _sessionPreRollBytes);
         // The completed take now owns this buffer; clearing it here would erase the ASR input.
         DisposeSession(clear: false);
+        _lastSessionEnd = _preRoll.TotalWritten;
         return result;
     }
 
@@ -1181,6 +1414,7 @@ internal sealed class CaptureSessionBuffer
     {
         DisposeSession(clear: true);
         _preRoll.Clear();
+        _marks.Clear();
     }
 
     internal void DiscardAudioPreservingSession()
@@ -1188,6 +1422,7 @@ internal sealed class CaptureSessionBuffer
         var wasActive = IsSessionActive;
         DisposeSession(clear: true);
         _preRoll.Clear();
+        _marks.Clear();
         if (wasActive)
         {
             Begin(4096);
@@ -1368,6 +1603,7 @@ internal sealed class PcmByteRingBuffer
     private readonly int _blockAlign;
     private int _writeOffset;
     private int _count;
+    private long _totalWritten;
 
     internal PcmByteRingBuffer(int capacity, int blockAlign)
     {
@@ -1377,6 +1613,9 @@ internal sealed class PcmByteRingBuffer
     }
 
     internal int Count => _count;
+    // Абсолютное число записанных байт (монотонно, не обнуляется Clear) и позиция старейшего в кольце.
+    internal long TotalWritten => _totalWritten;
+    internal long OldestOffset => _totalWritten - _count;
 
     internal void Write(ReadOnlySpan<byte> bytes)
     {
@@ -1386,6 +1625,7 @@ internal sealed class PcmByteRingBuffer
             return;
         }
         bytes = bytes[..alignedLength];
+        _totalWritten += bytes.Length;
         if (bytes.Length >= _buffer.Length)
         {
             bytes[^_buffer.Length..].CopyTo(_buffer);
@@ -1401,17 +1641,23 @@ internal sealed class PcmByteRingBuffer
         _count = Math.Min(_buffer.Length, _count + bytes.Length);
     }
 
-    internal byte[] Snapshot()
+    internal byte[] Snapshot() => Snapshot(OldestOffset);
+
+    // Содержимое от абсолютной позиции fromOffset (ограничено старейшим и последним байтом).
+    internal byte[] Snapshot(long fromOffset)
     {
-        var result = new byte[_count];
-        if (_count == 0)
+        var skip = (int)Math.Clamp(fromOffset - OldestOffset, 0, _count);
+        skip -= skip % _blockAlign;
+        var length = _count - skip;
+        var result = new byte[length];
+        if (length == 0)
         {
             return result;
         }
-        var start = (_writeOffset - _count + _buffer.Length) % _buffer.Length;
-        var first = Math.Min(_count, _buffer.Length - start);
+        var start = (_writeOffset - length + _buffer.Length) % _buffer.Length;
+        var first = Math.Min(length, _buffer.Length - start);
         _buffer.AsSpan(start, first).CopyTo(result);
-        _buffer.AsSpan(0, _count - first).CopyTo(result.AsSpan(first));
+        _buffer.AsSpan(0, length - first).CopyTo(result.AsSpan(first));
         return result;
     }
 
