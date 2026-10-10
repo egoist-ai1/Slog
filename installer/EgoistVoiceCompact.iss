@@ -38,8 +38,8 @@ UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppTitle}
 WizardStyle=modern
 DisableProgramGroupPage=yes
-DisableWelcomePage=yes
-DisableDirPage=no
+DisableWelcomePage=no
+DisableDirPage=yes
 DisableReadyPage=yes
 DisableFinishedPage=no
 DisableStartupPrompt=yes
@@ -70,7 +70,7 @@ VersionInfoProductTextVersion={#AppVersion}
 Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Files]
-Source: "..\assets\installer-microphone-52.bmp"; Flags: dontcopy
+Source: "..\assets\installer-mark-112.bmp"; Flags: dontcopy
 #include PayloadInclude
 
 [Icons]
@@ -85,33 +85,44 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 Type: files; Name: "{autoprograms}\Egoist Voice Compact.lnk"
 Type: files; Name: "{userdesktop}\Egoist Voice Compact.lnk"
 Type: files; Name: "{userdesktop}\{#AppTitle}.lnk"; Check: not ShouldCreateDesktopIcon
+; Слог 3.2 вернулся на GigaAM: остатки Whisper (модель и нативные рантаймы) больше не нужны.
+Type: filesandordirs; Name: "{app}\Models\Speech\whisper-large-v3-turbo-q5_0-v1"
+Type: filesandordirs; Name: "{app}\runtimes"
+Type: files; Name: "{app}\Egoist.Voice.dll.prev311"
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppTitle}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent
-
-[Messages]
-SelectDirLabel3=Выберите папку для Слога.
-ApplicationsFound=Завершите диктовку. Чтобы обновить файлы, установщик закроет приложения из списка.
-ApplicationsFound2=Завершите диктовку. Чтобы обновить файлы, установщик закроет приложения из списка.
+; shellexec: запуск через оболочку Windows. CreateProcess падает с кодом 740, если на exe стоит
+; совместимость «от имени администратора»; оболочка сама запросит повышение и не покажет ошибку.
+Filename: "{app}\{#AppExe}"; WorkingDir: "{app}"; Flags: nowait shellexec; Check: ShouldLaunch
 
 [Code]
+// Фирменное окно: чёрное, без системной рамки и кнопок, один лаймовый акцент.
+// Токены из docs/DESIGN.md (в Inno цвет задаётся как BGR).
 const
-  BackgroundColor = $00000000;
-  SurfaceColor = $001A1616;
-  PrimaryTextColor = $00FAFAFA;
-  SecondaryTextColor = $00ADA5A5;
-  AccentColor = $0000FFA8;
-  TrackColor = $00332B2B;
+  BackgroundColor = $000A0808;   // #08080A
+  SurfaceColor = $00141010;      // #101014
+  BorderColor = $00302A2A;       // #2A2A30
+  PrimaryTextColor = $00F8F7F7;  // #F7F7F8
+  SecondaryTextColor = $00AAA3A3; // #A3A3AA
+  AccentColor = $0000FFA8;       // #A8FF00
+  AccentTextColor = $00000F0A;   // #0A0F00
+
+  WindowWidth = 520;
+  WindowHeight = 372;
+  Margin = 40;
 
 var
-  BrandSurface: TPanel;
-  HeaderIcon: TBitmapImage;
-  ProductLabel, VersionLabel, StateLabel, DetailLabel, FolderLabel: TNewStaticText;
-  HintLabel, PercentLabel: TNewStaticText;
-  AutoStartCheck, DesktopIconCheck: TNewCheckBox;
+  Surface: TPanel;
+  MarkImage: TBitmapImage;
+  ProductLabel, SubtitleLabel, StateLabel, DetailLabel, FooterLabel, CloseLabel: TNewStaticText;
+  PercentLabel: TNewStaticText;
+  PrimaryButton: TPanel;
+  AutoStartBox, DesktopBox: TPanel;
+  AutoStartLabel, DesktopLabel: TNewStaticText;
   ProgressTrack, ProgressFill: TPanel;
   FailureMemo: TNewMemo;
-  IsBusyPage: Boolean;
+  AutoStartOn, DesktopOn: Boolean;
+  IsBusyPage, IsUpdate, AutoAdvanced: Boolean;
   LastReportedPercent: Integer;
 
 function DwmSetWindowAttribute(Wnd: Integer; Attribute: Integer;
@@ -127,7 +138,7 @@ function NewLabel(X, Y, W, H, FontSize: Integer; Text: String;
   FontColor: TColor; Bold: Boolean): TNewStaticText;
 begin
   Result := TNewStaticText.Create(WizardForm);
-  Result.Parent := BrandSurface;
+  Result.Parent := Surface;
   Result.AutoSize := False;
   Result.WordWrap := True;
   Result.ShowAccelChar := False;
@@ -139,31 +150,30 @@ begin
   Result.Caption := Text;
 end;
 
-procedure StyleMemo(Memo: TNewMemo);
+function ParamIsOne(Name: String): Boolean;
 begin
-  Memo.Parent := BrandSurface;
-  Memo.Color := SurfaceColor;
-  Memo.Font.Name := 'Segoe UI';
-  Memo.Font.Size := 10;
-  Memo.Font.Color := PrimaryTextColor;
-  Memo.ReadOnly := True;
-  Memo.WordWrap := True;
-  Memo.ScrollBars := ssVertical;
-  Memo.TabStop := True;
+  Result := ExpandConstant('{param:' + Name + '|}') = '1';
 end;
 
 function ShouldCreateDesktopIcon: Boolean;
 begin
-  Result := ExpandConstant('{param:EGOIST_DESKTOP|}') = '1';
-  if ExpandConstant('{param:EGOIST_DESKTOP|}') = '' then
-    Result := DesktopIconCheck.Checked;
+  if ExpandConstant('{param:EGOIST_DESKTOP|}') <> '' then
+    Result := ParamIsOne('EGOIST_DESKTOP')
+  else
+    Result := DesktopOn;
 end;
 
 function ShouldAutoStart: Boolean;
 begin
-  Result := ExpandConstant('{param:EGOIST_AUTOSTART|}') = '1';
-  if ExpandConstant('{param:EGOIST_AUTOSTART|}') = '' then
-    Result := AutoStartCheck.Checked;
+  if ExpandConstant('{param:EGOIST_AUTOSTART|}') <> '' then
+    Result := ParamIsOne('EGOIST_AUTOSTART')
+  else
+    Result := AutoStartOn;
+end;
+
+function ShouldLaunch: Boolean;
+begin
+  Result := not ParamIsOne('EGOIST_NOLAUNCH');
 end;
 
 procedure RegisterPreviousData(PreviousDataKey: Integer);
@@ -176,6 +186,50 @@ begin
     SetPreviousData(PreviousDataKey, 'DesktopIcon', '1')
   else
     SetPreviousData(PreviousDataKey, 'DesktopIcon', '0');
+end;
+
+procedure PaintBox(Box: TPanel; Checked: Boolean);
+begin
+  if Checked then
+  begin
+    Box.Color := AccentColor;
+    Box.Font.Color := AccentTextColor;
+    Box.Caption := '✓';
+  end
+  else
+  begin
+    Box.Color := BorderColor;
+    Box.Font.Color := BorderColor;
+    Box.Caption := '';
+  end;
+end;
+
+procedure ToggleAutoStart(Sender: TObject);
+begin
+  AutoStartOn := not AutoStartOn;
+  PaintBox(AutoStartBox, AutoStartOn);
+end;
+
+procedure ToggleDesktop(Sender: TObject);
+begin
+  DesktopOn := not DesktopOn;
+  PaintBox(DesktopBox, DesktopOn);
+end;
+
+// Кнопки и закрытие используют настоящие кнопки мастера, спрятанные за краем окна:
+// Enter и Esc работают, проверки Inno (место, занятые файлы) не обходятся.
+procedure PressPrimary(Sender: TObject);
+begin
+  if WizardForm.NextButton.Enabled then
+    WizardForm.NextButton.OnClick(WizardForm.NextButton);
+end;
+
+procedure PressClose(Sender: TObject);
+begin
+  if WizardForm.CurPageID = wpFinished then
+    WizardForm.NextButton.OnClick(WizardForm.NextButton)
+  else if WizardForm.CancelButton.Enabled then
+    WizardForm.CancelButton.OnClick(WizardForm.CancelButton);
 end;
 
 procedure SetProgress(Current, Total: Integer);
@@ -202,17 +256,18 @@ begin
   end;
 end;
 
-procedure LayoutFooter;
+procedure ParkNativeControls;
+var
+  Off: Integer;
 begin
-  WizardForm.BackButton.Parent := BrandSurface;
-  WizardForm.CancelButton.Parent := BrandSurface;
-  WizardForm.NextButton.Parent := BrandSurface;
-  SetBounds(WizardForm.BackButton, 28, 390, 88, 34);
-  SetBounds(WizardForm.CancelButton, 240, 390, 96, 34);
-  SetBounds(WizardForm.NextButton, 348, 390, 204, 34);
-  WizardForm.BackButton.Caption := 'Назад';
-  WizardForm.CancelButton.Caption := 'Отмена';
-  WizardForm.NextButton.Font.Style := [fsBold];
+  // Родные кнопки остаются живыми, но вне видимой области.
+  Off := -ScaleX(400);
+  WizardForm.BackButton.Parent := WizardForm;
+  WizardForm.NextButton.Parent := WizardForm;
+  WizardForm.CancelButton.Parent := WizardForm;
+  WizardForm.BackButton.SetBounds(Off, ScaleY(8), ScaleX(80), ScaleY(26));
+  WizardForm.NextButton.SetBounds(Off, ScaleY(40), ScaleX(80), ScaleY(26));
+  WizardForm.CancelButton.SetBounds(Off, ScaleY(72), ScaleX(80), ScaleY(26));
   WizardForm.NextButton.Default := True;
   WizardForm.CancelButton.Cancel := True;
 end;
@@ -221,8 +276,6 @@ procedure HidePageContent;
 begin
   WizardForm.OuterNotebook.Visible := False;
   WizardForm.InnerNotebook.Visible := False;
-  WizardForm.DirEdit.Visible := False;
-  WizardForm.DirBrowseButton.Visible := False;
   WizardForm.PreparingLabel.Visible := False;
   WizardForm.PreparingMemo.Visible := False;
   WizardForm.PreparingYesRadio.Visible := False;
@@ -230,224 +283,286 @@ begin
   WizardForm.RunList.Visible := False;
   WizardForm.YesRadio.Visible := False;
   WizardForm.NoRadio.Visible := False;
-  FolderLabel.Visible := False;
-  AutoStartCheck.Visible := False;
-  DesktopIconCheck.Visible := False;
+  AutoStartBox.Visible := False;
+  AutoStartLabel.Visible := False;
+  DesktopBox.Visible := False;
+  DesktopLabel.Visible := False;
   FailureMemo.Visible := False;
   ProgressTrack.Visible := False;
   PercentLabel.Visible := False;
-  HintLabel.Visible := False;
-  DetailLabel.Visible := True;
+  PrimaryButton.Visible := True;
+end;
+
+procedure StyleMemo(Memo: TNewMemo);
+begin
+  Memo.Parent := Surface;
+  Memo.Color := SurfaceColor;
+  Memo.BorderStyle := bsNone;
+  Memo.Font.Name := 'Segoe UI';
+  Memo.Font.Size := 9;
+  Memo.Font.Color := SecondaryTextColor;
+  Memo.ReadOnly := True;
+  Memo.WordWrap := True;
+  Memo.ScrollBars := ssVertical;
+  Memo.TabStop := True;
+end;
+
+function NewToggle(Y: Integer; Text: String; Handler: TNotifyEvent;
+  var Box: TPanel; var Caption: TNewStaticText): Boolean;
+begin
+  Box := TPanel.Create(WizardForm);
+  Box.Parent := Surface;
+  Box.BevelOuter := bvNone;
+  Box.ParentBackground := False;
+  Box.Font.Name := 'Segoe UI Symbol';
+  Box.Font.Size := 9;
+  Box.Font.Style := [fsBold];
+  Box.Cursor := crHand;
+  Box.OnClick := Handler;
+  SetBounds(Box, Margin, Y, 20, 20);
+  Caption := NewLabel(Margin + 32, Y, 400, 22, 10, Text, PrimaryTextColor, False);
+  Caption.Cursor := crHand;
+  Caption.OnClick := Handler;
+  Result := True;
 end;
 
 procedure CreateBrandShell;
 var
-  Dark: Integer;
+  Round: Integer;
 begin
+  WizardForm.BorderStyle := bsNone;
   WizardForm.Caption := 'Слог — установка';
-  WizardForm.ClientWidth := ScaleX(580);
-  WizardForm.ClientHeight := ScaleY(452);
-  WizardForm.Color := BackgroundColor;
+  WizardForm.ClientWidth := ScaleX(WindowWidth);
+  WizardForm.ClientHeight := ScaleY(WindowHeight);
+  WizardForm.Color := BorderColor;
   WizardForm.Font.Name := 'Segoe UI';
   WizardForm.Font.Size := 9;
-  // Keep the native movable window frame. No clipping region survives a DPI change.
-  Dark := 1;
-  if DwmSetWindowAttribute(WizardForm.Handle, 20, Dark, 4) <> 0 then
-    DwmSetWindowAttribute(WizardForm.Handle, 19, Dark, 4);
+  // Windows 11 скругляет окно без рамки; на Windows 10 вызов безвреден.
+  Round := 2;
+  DwmSetWindowAttribute(WizardForm.Handle, 33, Round, 4);
   WizardForm.Bevel.Visible := False;
   WizardForm.Bevel1.Visible := False;
   WizardForm.BeveledLabel.Visible := False;
 
-  BrandSurface := TPanel.Create(WizardForm);
-  BrandSurface.Parent := WizardForm;
-  BrandSurface.SetBounds(0, 0, WizardForm.ClientWidth, WizardForm.ClientHeight);
-  BrandSurface.Color := BackgroundColor;
-  BrandSurface.ParentBackground := False;
-  BrandSurface.BevelOuter := bvNone;
+  // Поверхность на один пиксель меньше окна: оставшаяся кайма и есть тонкая граница.
+  Surface := TPanel.Create(WizardForm);
+  Surface.Parent := WizardForm;
+  Surface.SetBounds(1, 1, WizardForm.ClientWidth - 2, WizardForm.ClientHeight - 2);
+  Surface.Color := BackgroundColor;
+  Surface.ParentBackground := False;
+  Surface.BevelOuter := bvNone;
 
-  ExtractTemporaryFile('installer-microphone-52.bmp');
-  HeaderIcon := TBitmapImage.Create(WizardForm);
-  HeaderIcon.Parent := BrandSurface;
-  HeaderIcon.AutoSize := False;
-  HeaderIcon.Stretch := True;
-  HeaderIcon.Bitmap.LoadFromFile(ExpandConstant('{tmp}\installer-microphone-52.bmp'));
-  SetBounds(HeaderIcon, 28, 24, 40, 40);
-  ProductLabel := NewLabel(82, 23, 330, 28, 17, 'Слог', PrimaryTextColor, True);
-  VersionLabel := NewLabel(83, 53, 420, 20, 9, 'Установка · {#AppVersion}', SecondaryTextColor, False);
-  StateLabel := NewLabel(28, 104, 524, 30, 16, '', PrimaryTextColor, True);
-  DetailLabel := NewLabel(28, 144, 524, 44, 10, '', SecondaryTextColor, False);
-  FolderLabel := NewLabel(28, 184, 524, 20, 9, 'Папка установки', SecondaryTextColor, False);
-  HintLabel := NewLabel(28, 316, 524, 48, 9, '', SecondaryTextColor, False);
-  PercentLabel := NewLabel(472, 238, 80, 24, 10, '', PrimaryTextColor, True);
+  ExtractTemporaryFile('installer-mark-112.bmp');
+  MarkImage := TBitmapImage.Create(WizardForm);
+  MarkImage.Parent := Surface;
+  MarkImage.AutoSize := False;
+  MarkImage.Stretch := True;
+  MarkImage.Bitmap.LoadFromFile(ExpandConstant('{tmp}\installer-mark-112.bmp'));
+  SetBounds(MarkImage, Margin, 40, 56, 56);
 
-  // Reuse Inno's directory edit and browse handler, including its validation and /DIR value.
-  WizardForm.DirEdit.Parent := BrandSurface;
-  WizardForm.DirEdit.Color := SurfaceColor;
-  WizardForm.DirEdit.Font.Color := PrimaryTextColor;
-  SetBounds(WizardForm.DirEdit, 28, 208, 416, 28);
-  WizardForm.DirBrowseButton.Parent := BrandSurface;
-  WizardForm.DirBrowseButton.Caption := 'Выбрать…';
-  SetBounds(WizardForm.DirBrowseButton, 456, 206, 96, 32);
+  ProductLabel := NewLabel(Margin + 72, 44, 300, 32, 20, 'Слог', PrimaryTextColor, True);
+  SubtitleLabel := NewLabel(Margin + 73, 78, 340, 20, 10, 'Локальная диктовка на русском', SecondaryTextColor, False);
 
-  AutoStartCheck := TNewCheckBox.Create(WizardForm);
-  AutoStartCheck.Parent := BrandSurface;
-  AutoStartCheck.Caption := 'Запускать вместе с Windows';
-  AutoStartCheck.Font.Color := PrimaryTextColor;
-  AutoStartCheck.Checked := GetPreviousData('AutoStart', '1') = '1';
-  SetBounds(AutoStartCheck, 28, 256, 524, 24);
-  DesktopIconCheck := TNewCheckBox.Create(WizardForm);
-  DesktopIconCheck.Parent := BrandSurface;
-  DesktopIconCheck.Caption := 'Создать ярлык на рабочем столе';
-  DesktopIconCheck.Font.Color := PrimaryTextColor;
-  DesktopIconCheck.Checked := GetPreviousData('DesktopIcon', '1') = '1';
-  SetBounds(DesktopIconCheck, 28, 286, 524, 24);
+  CloseLabel := NewLabel(WindowWidth - 44, 14, 28, 26, 14, '×', SecondaryTextColor, False);
+  CloseLabel.Cursor := crHand;
+  CloseLabel.OnClick := @PressClose;
 
-  StyleMemo(WizardForm.PreparingMemo);
-  WizardForm.PreparingLabel.Parent := BrandSurface;
-  WizardForm.PreparingLabel.Font.Color := SecondaryTextColor;
-  WizardForm.PreparingLabel.Font.Size := 10;
-  WizardForm.PreparingLabel.WordWrap := True;
-  SetBounds(WizardForm.PreparingLabel, 28, 144, 524, 44);
-  SetBounds(WizardForm.PreparingMemo, 28, 200, 524, 84);
-  WizardForm.PreparingYesRadio.Parent := BrandSurface;
-  WizardForm.PreparingNoRadio.Parent := BrandSurface;
-  WizardForm.PreparingYesRadio.Font.Color := PrimaryTextColor;
-  WizardForm.PreparingNoRadio.Font.Color := PrimaryTextColor;
+  StateLabel := NewLabel(Margin, 128, WindowWidth - 2 * Margin, 30, 15, '', PrimaryTextColor, True);
+  DetailLabel := NewLabel(Margin, 162, WindowWidth - 2 * Margin, 44, 10, '', SecondaryTextColor, False);
+  PercentLabel := NewLabel(WindowWidth - Margin - 80, 128, 80, 28, 11, '', SecondaryTextColor, False);
+  FooterLabel := NewLabel(Margin, 338, WindowWidth - 2 * Margin, 20, 8, '', SecondaryTextColor, False);
 
-  FailureMemo := TNewMemo.Create(WizardForm);
-  StyleMemo(FailureMemo);
-  WizardForm.RunList.Parent := BrandSurface;
-  WizardForm.RunList.Color := BackgroundColor;
-  WizardForm.RunList.Font.Color := PrimaryTextColor;
-  WizardForm.RunList.BorderStyle := bsNone;
-  WizardForm.YesRadio.Parent := BrandSurface;
-  WizardForm.NoRadio.Parent := BrandSurface;
-  WizardForm.YesRadio.Font.Color := PrimaryTextColor;
-  WizardForm.NoRadio.Font.Color := PrimaryTextColor;
+  AutoStartOn := GetPreviousData('AutoStart', '1') = '1';
+  DesktopOn := GetPreviousData('DesktopIcon', '0') = '1';
+  NewToggle(206, 'Запускать вместе с Windows', @ToggleAutoStart, AutoStartBox, AutoStartLabel);
+  NewToggle(236, 'Ярлык на рабочем столе', @ToggleDesktop, DesktopBox, DesktopLabel);
+  PaintBox(AutoStartBox, AutoStartOn);
+  PaintBox(DesktopBox, DesktopOn);
 
   ProgressTrack := TPanel.Create(WizardForm);
-  ProgressTrack.Parent := BrandSurface;
-  ProgressTrack.Color := TrackColor;
+  ProgressTrack.Parent := Surface;
+  ProgressTrack.Color := BorderColor;
   ProgressTrack.ParentBackground := False;
   ProgressTrack.BevelOuter := bvNone;
-  SetBounds(ProgressTrack, 28, 274, 524, 4);
+  SetBounds(ProgressTrack, Margin, 222, WindowWidth - 2 * Margin, 3);
   ProgressFill := TPanel.Create(WizardForm);
   ProgressFill.Parent := ProgressTrack;
   ProgressFill.Color := AccentColor;
   ProgressFill.ParentBackground := False;
   ProgressFill.BevelOuter := bvNone;
   ProgressFill.SetBounds(0, 0, 0, ProgressTrack.Height);
-  LayoutFooter;
+
+  StyleMemo(WizardForm.PreparingMemo);
+  FailureMemo := TNewMemo.Create(WizardForm);
+  StyleMemo(FailureMemo);
+  SetBounds(FailureMemo, Margin, 206, WindowWidth - 2 * Margin, 70);
+
+  PrimaryButton := TPanel.Create(WizardForm);
+  PrimaryButton.Parent := Surface;
+  PrimaryButton.BevelOuter := bvNone;
+  PrimaryButton.ParentBackground := False;
+  PrimaryButton.Color := AccentColor;
+  PrimaryButton.Font.Name := 'Segoe UI';
+  PrimaryButton.Font.Size := 10;
+  PrimaryButton.Font.Style := [fsBold];
+  PrimaryButton.Font.Color := AccentTextColor;
+  PrimaryButton.Cursor := crHand;
+  PrimaryButton.OnClick := @PressPrimary;
+  SetBounds(PrimaryButton, Margin, 284, 180, 40);
+  ParkNativeControls;
 end;
 
 procedure InitializeWizard;
 begin
   LastReportedPercent := -1;
   IsBusyPage := False;
+  AutoAdvanced := False;
+  IsUpdate := GetPreviousData('AutoStart', 'none') <> 'none';
   CreateBrandShell;
+end;
+
+// Закрытие без вопроса «Прервать установку?»: никаких системных окон.
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  Confirm := False;
+end;
+
+function IsAppRunning: Boolean;
+var
+  Code: Integer;
+begin
+  Result := Exec(ExpandConstant('{sys}\cmd.exe'),
+    '/c tasklist /FI "IMAGENAME eq {#AppExe}" /NH | find /I "{#AppExe}" >nul',
+    '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
+// Просим Слог завершиться штатно (--shutdown). Если на exe стоит «запуск от имени администратора»,
+// приложение работает с повышением, обычный установщик его не закроет: тогда запрос идёт через оболочку
+// Windows, и система сама спросит подтверждение. Диалогов «файл занят» после этого не будет.
+function StopRunningApp: Boolean;
+var
+  Code, Attempt: Integer;
+  AppPath: String;
+begin
+  Result := True;
+  if not IsAppRunning then Exit;
+  AppPath := ExpandConstant('{app}\{#AppExe}');
+  if not FileExists(AppPath) then Exit;
+  Log('App is running, requesting shutdown');
+  Exec(AppPath, '--shutdown', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  for Attempt := 1 to 6 do
+  begin
+    if not IsAppRunning then Exit;
+    Sleep(500);
+  end;
+  ShellExec('', AppPath, '--shutdown', '', SW_HIDE, ewWaitUntilTerminated, Code);
+  for Attempt := 1 to 10 do
+  begin
+    if not IsAppRunning then Exit;
+    Sleep(500);
+  end;
+  Result := not IsAppRunning;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if not StopRunningApp then
+    Result := 'Не удалось закрыть Слог. Закройте его в области уведомлений и запустите установку снова.';
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
 var
-  Busy, HasFailure, PreparingRestart, FinishedRestart: Boolean;
+  Busy, HasFailure: Boolean;
   FailureText: String;
 begin
-  // Read the engine state before changing visibility; busy files and actual failures differ.
+  // Состояние движка читаем до смены видимости: занятые файлы и настоящая ошибка различаются.
+  Log('Page ' + IntToStr(CurPageID));
   Busy := (CurPageID = wpPreparing) and WizardForm.PreparingMemo.Visible;
   HasFailure := (CurPageID = wpPreparing) and WizardForm.PreparingLabel.Visible and not Busy;
-  PreparingRestart := (CurPageID = wpPreparing) and WizardForm.PreparingYesRadio.Visible and not Busy;
-  FinishedRestart := (CurPageID = wpFinished) and WizardForm.YesRadio.Visible;
   FailureText := WizardForm.PreparingLabel.Caption;
   IsBusyPage := Busy;
   HidePageContent;
-  LayoutFooter;
+  ParkNativeControls;
+  CloseLabel.Visible := CurPageID <> wpInstalling;
+  FooterLabel.Caption := '';
 
-  if CurPageID = wpSelectDir then
+  if CurPageID = wpWelcome then
   begin
-    StateLabel.Caption := 'Готово к установке';
-#ifdef BundleTextEditor
-    DetailLabel.Caption := 'Русская диктовка и редактор текста. Модели уже внутри.';
-#else
-    DetailLabel.Caption := 'Русская диктовка. Модели уже внутри.';
-#endif
-    FolderLabel.Visible := True;
-    WizardForm.DirEdit.Visible := True;
-    WizardForm.DirBrowseButton.Visible := True;
-    AutoStartCheck.Visible := True;
-    DesktopIconCheck.Visible := True;
-    HintLabel.Caption := 'Интернет не нужен. Ваши настройки сохранятся при обновлении.';
-    HintLabel.Visible := True;
-    WizardForm.NextButton.Caption := 'Установить';
+    if IsUpdate then
+    begin
+      StateLabel.Caption := 'Обновление до {#AppVersion}';
+      PrimaryButton.Caption := 'Обновить';
+    end
+    else
+    begin
+      StateLabel.Caption := 'Готово к установке';
+      PrimaryButton.Caption := 'Установить';
+    end;
+    DetailLabel.Caption := 'Модели уже внутри, интернет не нужен. Настройки сохранятся.';
+    AutoStartBox.Visible := True;
+    AutoStartLabel.Visible := True;
+    DesktopBox.Visible := True;
+    DesktopLabel.Visible := True;
+    FooterLabel.Caption := 'Версия {#AppVersion} · Windows 10/11 x64 · без аккаунта и телеметрии';
+    if ParamIsOne('EGOIST_AUTO') and not AutoAdvanced then
+    begin
+      AutoAdvanced := True;
+      WizardForm.NextButton.OnClick(WizardForm.NextButton);
+    end;
   end
   else if CurPageID = wpPreparing then
   begin
     if Busy then
     begin
-      StateLabel.Caption := 'Voice нужно закрыть';
-      DetailLabel.Caption := 'Завершите диктовку. Установщик закроет приложения ниже и обновит их файлы.';
-      SetBounds(WizardForm.PreparingMemo, 28, 204, 524, 84);
-      WizardForm.PreparingMemo.Visible := True;
+      StateLabel.Caption := 'Слог сейчас запущен';
+      DetailLabel.Caption := 'Нужно закрыть его, чтобы обновить файлы. Завершите диктовку и продолжайте.';
       WizardForm.PreparingYesRadio.Checked := True;
-      HintLabel.Caption := 'Можно закрыть Voice через меню в трее, затем продолжить здесь.';
-      HintLabel.Visible := True;
-      WizardForm.NextButton.Caption := 'Закрыть и продолжить';
+      SetBounds(WizardForm.PreparingMemo, Margin, 206, WindowWidth - 2 * Margin, 70);
+      WizardForm.PreparingMemo.Visible := True;
+      PrimaryButton.Caption := 'Закрыть и продолжить';
     end
     else if HasFailure then
     begin
       StateLabel.Caption := 'Установка приостановлена';
-      DetailLabel.Caption := 'Устраните причину ниже, затем повторите установку.';
+      DetailLabel.Caption := 'Устраните причину ниже и запустите установщик снова.';
       FailureMemo.Text := FailureText;
-      SetBounds(FailureMemo, 28, 198, 524, 102);
       FailureMemo.Visible := True;
-      if PreparingRestart then
-      begin
-        SetBounds(WizardForm.PreparingYesRadio, 28, 310, 524, 26);
-        SetBounds(WizardForm.PreparingNoRadio, 28, 340, 524, 26);
-        WizardForm.PreparingYesRadio.Visible := True;
-        WizardForm.PreparingNoRadio.Visible := True;
-      end;
+      PrimaryButton.Caption := 'Закрыть';
     end
     else
     begin
-      StateLabel.Caption := 'Проверяем готовность';
-      DetailLabel.Caption := 'Проверка папки, свободного места и открытых приложений…';
-      SetBounds(WizardForm.PreparingLabel, 28, 144, 524, 44);
-      SetBounds(WizardForm.PreparingMemo, 28, 200, 524, 84);
+      StateLabel.Caption := 'Проверяю готовность';
+      DetailLabel.Caption := 'Папка, свободное место, открытые приложения…';
+      PrimaryButton.Visible := False;
     end;
   end
   else if CurPageID = wpInstalling then
   begin
-    StateLabel.Caption := 'Устанавливаем Voice';
-    DetailLabel.Caption := 'Копируем приложение и локальные модели. Это займёт несколько минут.';
+    StateLabel.Caption := 'Устанавливаю';
+    DetailLabel.Caption := 'Копирую приложение и локальные модели. Это займёт около минуты.';
     ProgressTrack.Visible := True;
     PercentLabel.Visible := True;
+    PrimaryButton.Visible := False;
     SetProgress(0, 100);
-    HintLabel.Caption := 'После установки можно сразу диктовать — скачивать модели не нужно.';
-    HintLabel.Visible := True;
   end
   else if CurPageID = wpFinished then
   begin
     StateLabel.Caption := 'Готово';
-    DetailLabel.Caption := 'Слог установлен.';
-    SetBounds(WizardForm.RunList, 28, 212, 524, 70);
-    WizardForm.RunList.Visible := not FinishedRestart;
-    if FinishedRestart then
-    begin
-      DetailLabel.Caption := WizardForm.FinishedLabel.Caption;
-      SetBounds(WizardForm.YesRadio, 28, 230, 524, 32);
-      SetBounds(WizardForm.NoRadio, 28, 270, 524, 32);
-      WizardForm.YesRadio.Visible := True;
-      WizardForm.NoRadio.Visible := True;
-    end;
-    HintLabel.Caption := 'Значок Voice появится в области уведомлений Windows.';
-    HintLabel.Visible := not FinishedRestart;
-    WizardForm.NextButton.Caption := 'Готово';
+    DetailLabel.Caption := 'Слог в трее. Удерживайте Mouse 5 и говорите.';
+    PrimaryButton.Caption := 'Закрыть';
   end;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
-  // The clearly labelled action authorizes Restart Manager only for this payload's files.
+  Log('Next on page ' + IntToStr(CurPageID));
+  if CurPageID = wpWelcome then
+  begin
+    StateLabel.Caption := 'Закрываю Слог';
+    StopRunningApp;
+  end;
+  // Понятная кнопка «Закрыть и продолжить» разрешает Restart Manager закрыть только файлы этого пакета.
   if (CurPageID = wpPreparing) and IsBusyPage then
     WizardForm.PreparingYesRadio.Checked := True;
   Result := True;
