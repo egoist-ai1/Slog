@@ -68,6 +68,19 @@ internal sealed class TakeContext
     /// <summary>Запись учтена в счётчике распознаваний окна (чтобы снять его ровно один раз).</summary>
     internal bool CountedAsProcessing { get; set; }
 
+    /// <summary>
+    /// Устройство захвата освобождено этой записью: StopAsync вернулся либо запись закрыта без него.
+    /// Следующая запись не ставит Start в очередь раньше: иначе Start(B) оказался бы в очереди
+    /// перед Stop(A), который появляется только после окончания старта A.
+    /// </summary>
+    internal TaskCompletionSource CaptureReleased { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Пользователю показали «Подключаю»: он ждёт и ещё не говорит.</summary>
+    internal bool ConnectingShown { get; set; }
+
+    /// <summary>Кнопка записи сейчас удерживается: старт идёт или запись идёт, отпускания не было.</summary>
+    internal bool IsHeld => Phase is TakePhase.Starting or TakePhase.Recording && ReleaseTimestamp == 0;
+
     internal CancellationToken Token { get; }
 
     internal bool IsCancellationRequested => Token.IsCancellationRequested;

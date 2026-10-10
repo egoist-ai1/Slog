@@ -387,8 +387,8 @@ public partial class MainWindow
 
     private void PlayFeedback(FeedbackSound sound, bool preview = false)
     {
-        // Сигнал старта вызывается строго после успешного открытия захвата; подавление звука в захвате
-        // ограничено 40 мс (AudioCaptureService.SuppressFeedbackAudio), pre-roll речь не теряет.
+        // Сигнал старта играется только при «Подключаю» (см. OnCaptureStarted): пользователь ждёт и не
+        // говорит, поэтому захват подавляет весь CaptureExclusionWindow, а речь не страдает.
         if (preview)
         {
             _sounds.Preview(sound);

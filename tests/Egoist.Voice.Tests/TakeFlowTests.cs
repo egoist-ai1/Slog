@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using Egoist.Voice.Core;
 using Egoist.Voice.Services;
@@ -289,6 +290,101 @@ public sealed class MainWindowTakeFlowTests(CaptureWindowDispatcher dispatcher)
         Assert.True(f.Capture.LastReleaseTimestamp >= f.Capture.LastPressTimestamp);
         // Без речи короткий тап не оставляет красной ошибки.
         Assert.NotEqual(CapsuleVisualStateKind.Error, f.Window.CurrentVisualKind);
+    });
+
+    [Fact]
+    public Task Press_after_a_take_released_while_its_start_was_queued_is_not_lost() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(); await f.ReadyAsync();
+        var stopGate = f.Capture.Block("stop");
+        f.Press(PushToTalkSource.Keyboard);                          // C: старт сразу
+        var releaseC = f.ReleaseAsync(PushToTalkSource.Keyboard);    // Stop(C) дописывает хвост
+        await stopGate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        f.Press(PushToTalkSource.Keyboard);                          // A: старт ждёт в очереди
+        Assert.False(f.Window.CanStartRecording);                    // A удерживается: новый старт запрещён
+        var releaseA = f.ReleaseAsync(PushToTalkSource.Keyboard);    // A отпущена до конца своего старта
+        Assert.True(f.Window.CanStartRecording);                     // отпущенная запись больше не блокирует
+
+        f.Press(PushToTalkSource.Keyboard);                          // B: должна начаться
+        Assert.Equal(3, f.Window.ActiveTakeCount);
+        Assert.True(f.Window.IsRecording);
+        Assert.Equal(2, f.Capture.TailCapCount);                     // хвост A и C обрезан нажатием
+        var releaseB = f.ReleaseAsync(PushToTalkSource.Keyboard);
+
+        stopGate.Release.Set();
+        await Task.WhenAll(releaseC, releaseA, releaseB).WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Устройство отдаётся строго по очереди: Start(B) не обгоняет Stop(A).
+        Assert.Equal(["start", "stop", "start", "stop", "start", "stop"],
+            f.Capture.Calls.Where(call => call is "start" or "stop").ToArray());
+        Assert.Equal(0, f.Window.ActiveTakeCount);
+    });
+
+    [Fact]
+    public Task Held_take_blocks_new_start_until_it_is_released() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(); await f.ReadyAsync();
+        var gate = f.Capture.Block("start");
+        f.Press(PushToTalkSource.Keyboard);
+        try
+        {
+            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.False(f.Window.CanStartRecording);
+            Assert.Equal(0, f.Capture.TailCapCount);
+        }
+        finally { gate.Release.Set(); }
+        await WaitUntil(() => f.Capture.Active);
+        Assert.False(f.Window.CanStartRecording);
+        await f.ReleaseAsync(PushToTalkSource.Keyboard);
+        Assert.True(f.Window.CanStartRecording);
+    });
+
+    [Fact]
+    public Task Cancelled_take_between_start_and_stop_check_is_finalized() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(); await f.ReadyAsync();
+        var window = f.Window;
+        var take = new TakeContext(900, System.Diagnostics.Stopwatch.GetTimestamp(), 0, CancellationToken.None)
+        {
+            Phase = TakePhase.Recording,
+            StartTask = Task.CompletedTask
+        };
+        take.ReleaseTimestamp = take.PressTimestamp + 1;
+        take.Cancel(); // отменили после конца старта, до проверки в FinishPendingRecordingAsync
+        var takes = (List<TakeContext>)typeof(MainWindow)
+            .GetField("_activeTakes", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+        takes.Add(take);
+        Assert.Equal(1, window.ActiveTakeCount);
+
+        await (Task)typeof(MainWindow).GetMethod("FinishPendingRecordingAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [take])!;
+
+        Assert.Equal(0, window.ActiveTakeCount);
+        Assert.Equal(TakePhase.Done, take.Phase);
+        Assert.True(take.CaptureReleased.Task.IsCompleted);
+    });
+
+    [Fact]
+    public Task Lost_capture_session_cancels_only_live_takes_not_the_ones_being_recognized() => dispatcher.RunAsync(async () =>
+    {
+        var insertion = new RecordingInsertion();
+        await using var f = new WindowFixture(
+            configure: capture => capture.ReturnSpeech = true,
+            delivery: new DictationDeliveryService(new NullClipboard(), insertion) { RestoreClipboard = false });
+        await f.ReadyAsync();
+        var gate = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Transcription.SampleHandler = (_, _) => gate.Task;
+
+        f.Press(PushToTalkSource.Keyboard);
+        var release = f.ReleaseAsync(PushToTalkSource.Keyboard);
+        await WaitUntil(() => f.Transcription.SampleCalls == 1);
+
+        f.Capture.EmitState(activeTakeCancelled: true); // сессия захвата потеряна, но звук этой записи уже получен
+        gate.SetResult("распознано");
+        await release.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(["распознано"], insertion.Inserted.Select(item => item.Text).ToArray());
     });
 
     private static async Task WaitUntil(Func<bool> condition)

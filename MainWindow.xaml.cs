@@ -41,7 +41,8 @@ public partial class MainWindow : Window, IDisposable
     private Task? _inventoryNotificationTask;
     private Task? _captureCancelTask;
     private Task? _disposeTask;
-    private bool _isStartingCapture;
+    // Идёт старт хотя бы одной записи: считается по записям, а не общим флагом.
+    private bool _isStartingCapture => _activeTakes.Any(take => take.Phase == TakePhase.Starting);
     private int _captureChangeCount;
     private bool _isChangingCapture => _captureChangeCount > 0;
     private bool _isCancellingCapture;
@@ -211,7 +212,7 @@ public partial class MainWindow : Window, IDisposable
         _isCancellingCapture || !_captureInitializationTask.IsCompleted || _disposed;
 
     public bool CanStartRecording => !_disposed && !CurrentAudioCaptureState.IsUserPaused &&
-        !_isStartingCapture && !_isChangingCapture && !_isCancellingCapture && !_isRecording;
+        !_isChangingCapture && !_isCancellingCapture && !_activeTakes.Any(take => take.IsHeld);
 
     public IReadOnlyList<MicrophoneDeviceInfo> CaptureDevices => _captureDevices;
 
@@ -550,9 +551,17 @@ public partial class MainWindow : Window, IDisposable
     {
         // Нажатие во время распознавания прошлой фразы разрешено: у каждой записи свой TakeContext.
         if (_disposed || _isChangingCapture || _isCancellingCapture || CurrentAudioCaptureState.IsUserPaused) return;
-        if (_pushToTalk.Press(source) && CanStartRecording && !_isRecording)
+        if (_pushToTalk.Press(source) && CanStartRecording)
         {
-            _ = StartRecordingAsync(pressTimestamp != 0 ? pressTimestamp : Stopwatch.GetTimestamp());
+            var press = pressTimestamp != 0 ? pressTimestamp : Stopwatch.GetTimestamp();
+            // Хвост прежней записи ещё пишется или её старт ждёт в очереди: обрезаем его по нажатию
+            // сразу, минуя очередь, иначе начало новой фразы уйдёт в старую запись.
+            if (_activeTakes.Any(take => !take.CaptureReleased.Task.IsCompleted))
+            {
+                try { _audioCapture.CapTail(press); }
+                catch (Exception exception) { AppLog.Write("CapTail failed", exception); }
+            }
+            _ = StartRecordingAsync(press);
         }
     }
 
@@ -576,7 +585,9 @@ public partial class MainWindow : Window, IDisposable
         _pushToTalk.SetPaused(_isChangingCapture || change.State.IsUserPaused);
         if (change.ActiveTakeCancelled)
         {
-            foreach (var take in _activeTakes.ToArray()) CancelTake(take);
+            // Записи, у которых звук уже получен и распознаётся, не трогаем: у них нет живого захвата.
+            foreach (var take in _activeTakes.Where(take => take.Phase is TakePhase.Starting or TakePhase.Recording).ToArray())
+                CancelTake(take);
             _isRecording = false;
             _interactionHooks.DisarmCancel();
             ShowError("Запись отменена");

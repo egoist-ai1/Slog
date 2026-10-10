@@ -69,7 +69,6 @@ public partial class MainWindow
         _forceHideAfterCancellation = false;
         _hideTimer.Stop();
         _recordingStartedUtc = take.StartedUtc;
-        _isStartingCapture = true;
         _isRecording = true;
         _interactionHooks.ArmCancel();
         // Капсула появляется сразу, без текста; «Подключаю» — только если старт затянется.
@@ -83,6 +82,7 @@ public partial class MainWindow
         try
         {
             await _captureInitializationTask;
+            await WaitForEarlierCaptureAsync(take);
             await RunCaptureOperationAsync(() => _audioCapture.Start(take.PressTimestamp), take.Token);
             take.Token.ThrowIfCancellationRequested();
             if (_disposed) return;
@@ -105,7 +105,16 @@ public partial class MainWindow
             if (!_disposed && OwnsCapsule(take)) ShowError(GetMicrophoneError(exception));
             FinalizeTake(take);
         }
-        finally { _isStartingCapture = false; }
+    }
+
+    /// <summary>
+    /// Start новой записи ставится в очередь только после того, как прежние записи отдали устройство:
+    /// у отпущенной записи Stop появляется в очереди лишь после окончания её старта.
+    /// </summary>
+    private async Task WaitForEarlierCaptureAsync(TakeContext take)
+    {
+        foreach (var earlier in _activeTakes.TakeWhile(other => !ReferenceEquals(other, take)).ToArray())
+            await earlier.CaptureReleased.Task.WaitAsync(take.Token);
     }
 
     /// <summary>Сигнал «можно говорить»: анимация и звук строго после успешного старта захвата.</summary>
@@ -117,7 +126,9 @@ public partial class MainWindow
         SetListeningState();
         PlayReadyToSpeakAnimation();
         RefreshCapsuleAnimationEligibility();
-        PlayFeedback(FeedbackSound.RecordingStarted);
+        // Звук старта — только если пользователь ждал («Подключаю») и ещё не говорит. При быстром
+        // старте он говорит сразу, и сигнал попал бы в начало записи.
+        if (take.ConnectingShown) PlayFeedback(FeedbackSound.RecordingStarted);
     }
 
     private async Task ShowConnectingIfSlowAsync(TakeContext take, long startRequested)
@@ -132,7 +143,10 @@ public partial class MainWindow
         catch (OperationCanceledException) { return; }
         var stillPending = take.Phase == TakePhase.Starting && !_disposed && OwnsCapsule(take);
         if (ConnectingIndicatorPolicy.ShouldShow(Stopwatch.GetElapsedTime(startRequested), stillPending))
+        {
+            take.ConnectingShown = true;
             SetProcessingState("Подключаю", null);
+        }
     }
 
     /// <summary>Пишет в лог время от нажатия до первого кадра капсулы; только число, без текста речи.</summary>
@@ -161,6 +175,8 @@ public partial class MainWindow
         if (take.StartTask is { } starting) await starting;
         if (!_disposed && take.Phase == TakePhase.Recording && !take.IsCancellationRequested)
             await StopAndTranscribeAsync(take, take.ReleaseTimestamp);
+        else
+            FinalizeTake(take); // отменена между концом старта и этой проверкой: иначе утечка токена и записи
     }
 
     private async Task StopAndTranscribeAsync(TakeContext take, long releaseTimestamp)
@@ -186,8 +202,13 @@ public partial class MainWindow
 
         try
         {
-            var capture = await RunCaptureOperationAsync(
-                () => _audioCapture.StopAsync(releaseTimestamp, cancellationToken), cancellationToken);
+            AudioCaptureResult capture;
+            try
+            {
+                capture = await RunCaptureOperationAsync(
+                    () => _audioCapture.StopAsync(releaseTimestamp, cancellationToken), cancellationToken);
+            }
+            finally { take.CaptureReleased.TrySetResult(); }
             completedCapture = capture;
             take.Phase = TakePhase.Recognizing;
             trace.Mark(DictationStage.CaptureStopped);
@@ -386,6 +407,7 @@ public partial class MainWindow
     {
         if (take.Phase == TakePhase.Done) return;
         take.Phase = TakePhase.Done;
+        take.CaptureReleased.TrySetResult();
         EndProcessing(take);
         _activeTakes.Remove(take);
         take.Turn?.Complete();

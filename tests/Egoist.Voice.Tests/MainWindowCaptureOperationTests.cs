@@ -239,7 +239,33 @@ public sealed class MainWindowCaptureOperationTests(CaptureWindowDispatcher disp
         f.Window.ApplyDictationSettings();
         await f.Window.ToggleRecordingAsync();
         Assert.True(f.Capture.Active);
-        // Сигнал играет после успешного старта захвата; окно подавления в захвате ограничено 40 мс.
+        // Быстрый старт: пользователь уже говорит, сигнал в запись не попадёт только если его нет.
+        Assert.Equal(0, f.Capture.SuppressCount);
+        await f.CancelAsync();
+    });
+
+    [Fact]
+    public Task Start_cue_plays_once_after_slow_start_that_showed_connecting() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(); await f.ReadyAsync();
+        f.Settings.Save(f.Settings.Load() with { SoundFeedback = true });
+        f.Window.ApplyDictationSettings();
+        var gate = f.Capture.Block("start");
+        var start = f.Window.ToggleRecordingAsync();
+        try
+        {
+            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+            while (f.Window.CurrentVisualLabel != "Подключаю")
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException("Подпись «Подключаю» не появилась.");
+                await Task.Delay(10);
+            }
+            Assert.Equal(0, f.Capture.SuppressCount); // пока захват не открыт, сигнала нет
+        }
+        finally { gate.Release.Set(); }
+        await start;
+        // Пользователь ждал и молчал: сигнал играет один раз и подавляется весь его CaptureExclusionWindow.
         Assert.Equal(1, f.Capture.SuppressCount);
         await f.CancelAsync();
     });
@@ -505,8 +531,11 @@ internal sealed class ControlledCapture:IAudioCaptureService
     }
     public AudioCaptureState GetState(){Interlocked.Increment(ref StateReads);Native("state");return new(_selected,"Fake",Paused,!Paused,true){IsTransientlyUnavailable=Transient};}
     public IReadOnlyList<MicrophoneDeviceInfo> GetCaptureDevices(){Interlocked.Increment(ref DeviceReads);Native("devices");return[new("test","Fake",true),new("other","Other",false)];}
-    internal void EmitState() => StateChanged?.Invoke(this,
-        new AudioCaptureStateChangedEventArgs(GetState(), AudioCaptureChangeKind.InventoryChanged, false, null));
+    internal void EmitState(bool activeTakeCancelled = false) => StateChanged?.Invoke(this,
+        new AudioCaptureStateChangedEventArgs(GetState(), AudioCaptureChangeKind.InventoryChanged, activeTakeCancelled, null));
+    internal int TailCapCount;
+    internal long LastTailCap;
+    public void CapTail(long pressTimestamp){Interlocked.Increment(ref TailCapCount);LastTailCap=pressTimestamp;}
     public void Start(long pressTimestamp){LastPressTimestamp=pressTimestamp;Start();}
     public Task<AudioCaptureResult> StopAsync(long releaseTimestamp,CancellationToken token){LastReleaseTimestamp=releaseTimestamp;return StopAsync(token);}
     public void Start(){Interlocked.Increment(ref StartCount);Native("start");if(FailNextStart){FailNextStart=false;Paused=true;Transient=true;throw new MicrophoneUnavailableException("Fake unavailable");}Active=true;Paused=false;Transient=false;}
