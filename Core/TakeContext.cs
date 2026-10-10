@@ -1,4 +1,4 @@
-using Egoist.Voice.Services;
+﻿using Egoist.Voice.Services;
 
 namespace Egoist.Voice.Core;
 
@@ -115,9 +115,15 @@ internal sealed class TakeTurn
     private readonly TaskCompletionSource _done = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _previous;
 
-    internal TakeTurn(Task previous) => _previous = previous;
+    internal TakeTurn(Task previous)
+    {
+        _previous = previous;
+        // Очередь освобождается, только когда завершились и эта запись, и все более ранние: запись,
+        // вышедшая без доставки (нет речи, ошибка), не должна пускать следующих вперёд предыдущих.
+        Completion = Task.WhenAll(previous, _done.Task);
+    }
 
-    internal Task Completion => _done.Task;
+    internal Task Completion { get; }
 
     /// <summary>Ждёт завершения всех более ранних записей. Отмена своей записи прерывает ожидание.</summary>
     internal Task WaitForTurnAsync(CancellationToken cancellationToken) => _previous.WaitAsync(cancellationToken);

@@ -428,7 +428,7 @@ internal sealed class WindowFixture:IAsyncDisposable
     internal MainWindow Window {get;}
     internal nint Foreground {get;set;}=1234;
     internal int ForegroundReads {get;private set;}
-    internal WindowFixture(Action<ControlledCapture>? configure = null, bool paused = false, bool? initialReducedMotion = null)
+    internal WindowFixture(Action<ControlledCapture>? configure = null, bool paused = false, bool? initialReducedMotion = null, DictationDeliveryService? delivery = null)
     {
         configure?.Invoke(Capture);
         _root=Path.Combine(Environment.GetEnvironmentVariable("EGOIST_VOICE_TEST_ROOT")??Path.GetTempPath(),"voice-window-tests",Guid.NewGuid().ToString("N"));Directory.CreateDirectory(_root);
@@ -455,7 +455,7 @@ internal sealed class WindowFixture:IAsyncDisposable
                     .SetValue(_theme, reducedMotion);
             };
         }
-        Window=new(Capture,Transcription,new(new ClipboardService(),new TextInsertionService()),new FakeWindowModels(),Settings,new RecentRecordingHistoryService(Path.Combine(_root,"history")),_theme,
+        Window=new(Capture,Transcription,delivery??new(new ClipboardService(),new TextInsertionService()),new FakeWindowModels(),Settings,new RecentRecordingHistoryService(Path.Combine(_root,"history")),_theme,
             new MainWindowInteractionHooks(()=>{ForegroundReads++;return Foreground;},()=>{},()=>{},()=>true));
         Window.ShowActivated=false;Window.Left=-20000;Window.Top=-20000;
     }
@@ -489,6 +489,8 @@ internal sealed class ControlledCapture:IAudioCaptureService
     internal int MaximumConcurrentOperations {get;private set;}
     internal int StartCount,StopCount,CancelCount,PauseCount,SelectCount,DisposeCount,StateReads,DeviceReads,SuppressCount;
     internal bool Active,Paused,Transient,FailNextStart;
+    internal bool ReturnSpeech;
+    internal long LastPressTimestamp, LastReleaseTimestamp;
     private string? _selected;
     public event EventHandler<float>? LevelChanged { add { } remove { } }
     public event EventHandler<VoiceTimbreLevel>? TimbreChanged { add { } remove { } }
@@ -505,17 +507,27 @@ internal sealed class ControlledCapture:IAudioCaptureService
     public IReadOnlyList<MicrophoneDeviceInfo> GetCaptureDevices(){Interlocked.Increment(ref DeviceReads);Native("devices");return[new("test","Fake",true),new("other","Other",false)];}
     internal void EmitState() => StateChanged?.Invoke(this,
         new AudioCaptureStateChangedEventArgs(GetState(), AudioCaptureChangeKind.InventoryChanged, false, null));
+    public void Start(long pressTimestamp){LastPressTimestamp=pressTimestamp;Start();}
+    public Task<AudioCaptureResult> StopAsync(long releaseTimestamp,CancellationToken token){LastReleaseTimestamp=releaseTimestamp;return StopAsync(token);}
     public void Start(){Interlocked.Increment(ref StartCount);Native("start");if(FailNextStart){FailNextStart=false;Paused=true;Transient=true;throw new MicrophoneUnavailableException("Fake unavailable");}Active=true;Paused=false;Transient=false;}
     public void SelectCaptureDevice(string? id){Interlocked.Increment(ref SelectCount);Native("select");_selected=id;Active=false;}
     public void PauseMonitoring(){Interlocked.Increment(ref PauseCount);Native("pause");Paused=true;Transient=false;Active=false;}
     public void ResumeMonitoring(){Native("resume");Paused=false;Transient=false;}
     public void SuppressFeedbackAudio(TimeSpan d)=>Interlocked.Increment(ref SuppressCount);
-    public Task<AudioCaptureResult> StopAsync(CancellationToken token){Interlocked.Increment(ref StopCount);Native("stop");token.ThrowIfCancellationRequested();Active=false;return Task.FromResult(new AudioCaptureResult(null,[],16000,false,TimeSpan.Zero,TimeSpan.Zero,-96));}
+    public Task<AudioCaptureResult> StopAsync(CancellationToken token){Interlocked.Increment(ref StopCount);Native("stop");token.ThrowIfCancellationRequested();Active=false;return Task.FromResult(ReturnSpeech?new AudioCaptureResult(null,[0.1f],16000,true,TimeSpan.FromSeconds(1),TimeSpan.FromSeconds(1),-20):new AudioCaptureResult(null,[],16000,false,TimeSpan.Zero,TimeSpan.Zero,-96));}
     public Task<string?> CancelAsync(){Interlocked.Increment(ref CancelCount);Native("cancel");Active=false;return Task.FromResult<string?>(null);}
     public void Dispose(){Interlocked.Increment(ref DisposeCount);Native("dispose");Active=false;}
 }
-internal sealed class FakeWindowTranscription:ITranscriptionService
+internal sealed class FakeWindowTranscription:ITranscriptionService,ISampleTranscriptionService
 {
+    internal Func<int,CancellationToken,Task<string>>? SampleHandler;
+    internal int SampleCalls;
+    public async Task<TranscriptionResult> TranscribeSamplesAsync(float[] samples,int rate,CancellationToken token)
+    {
+        var call=Interlocked.Increment(ref SampleCalls);
+        if(SampleHandler is null)throw new InvalidOperationException("No real audio decode permitted");
+        return new TranscriptionResult(await SampleHandler(call,token),TimeSpan.Zero);
+    }
     internal int TranscribeCount,DisposeCount;
     internal bool DelayWarmup, WarmupTerminated, DisposedDuringWarmup;
     internal TaskCompletionSource WarmupEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

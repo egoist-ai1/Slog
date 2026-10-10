@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
 using Egoist.Voice.Core;
@@ -122,7 +122,13 @@ public partial class MainWindow
 
     private async Task ShowConnectingIfSlowAsync(TakeContext take, long startRequested)
     {
-        try { await Task.Delay(ConnectingIndicatorPolicy.Threshold, take.Token); }
+        try
+        {
+            // Task.Delay может сработать на несколько мс раньше по Stopwatch — доживаем до порога.
+            while (Stopwatch.GetElapsedTime(startRequested) < ConnectingIndicatorPolicy.Threshold)
+                await Task.Delay(ConnectingIndicatorPolicy.Threshold - Stopwatch.GetElapsedTime(startRequested)
+                    + TimeSpan.FromMilliseconds(1), take.Token);
+        }
         catch (OperationCanceledException) { return; }
         var stillPending = take.Phase == TakePhase.Starting && !_disposed && OwnsCapsule(take);
         if (ConnectingIndicatorPolicy.ShouldShow(Stopwatch.GetElapsedTime(startRequested), stillPending))
