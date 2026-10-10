@@ -33,7 +33,10 @@ public partial class App
                 Environment.GetEnvironmentVariable("EGOIST_EVAL_" + name) is { Length: > 0 } value ? value.Trim() : null;
 
             var gainDb = Env("GAIN_DB") is { } gain ? double.Parse(gain, CultureInfo.InvariantCulture) : 0d;
-            var tailMs = Env("TAIL_MS") is { } tail ? int.Parse(tail, CultureInfo.InvariantCulture) : 0;
+            double? normalizeTarget = Env("NORMALIZE_PEAK_DB") is { } np ? double.Parse(np, CultureInfo.InvariantCulture) : null;
+            var normalizeMaxGainDb = Env("NORMALIZE_MAX_GAIN_DB") is { } ng ? double.Parse(ng, CultureInfo.InvariantCulture) : 30d;
+            var normalizeOnlyBelowDb = Env("NORMALIZE_ONLY_BELOW_DB") is { } nb ? double.Parse(nb, CultureInfo.InvariantCulture) : 0d;
+            var tailMs =Env("TAIL_MS") is { } tail ? int.Parse(tail, CultureInfo.InvariantCulture) : 0;
             var threads = Env("THREADS") is { } t ? int.Parse(t, CultureInfo.InvariantCulture) : 4;
             var plainOnly = Env("PLAIN_ONLY") is "1" or "true";
             var encoder = (Env("ENCODER") ?? "int8").ToLowerInvariant();
@@ -78,6 +81,23 @@ public partial class App
                 {
                     for (var i = 0; i < samples.Length; i++)
                         samples[i] = Math.Clamp((float)(samples[i] * gainFactor), -1f, 1f);
+                }
+                if (normalizeTarget is { } target)
+                {
+                    // Статическая пиковая нормализация записи целиком (одно усиление на всё аудио).
+                    var peak = 0f;
+                    foreach (var sample in samples) peak = Math.Max(peak, Math.Abs(sample));
+                    if (peak > 1e-6f)
+                    {
+                        var peakDb = 20d * Math.Log10(peak);
+                        if (normalizeOnlyBelowDb == 0 || peakDb < normalizeOnlyBelowDb)
+                        {
+                            var appliedDb = Math.Min(target - peakDb, normalizeMaxGainDb);
+                            var factor = Math.Pow(10, appliedDb / 20d);
+                            for (var i = 0; i < samples.Length; i++)
+                                samples[i] = Math.Clamp((float)(samples[i] * factor), -1f, 1f);
+                        }
+                    }
                 }
                 if (tailMs > 0)
                 {
