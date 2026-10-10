@@ -65,10 +65,20 @@ public sealed class GigaAmTranscriptionService : ITranscriptionEngine, ISampleTr
 
     public string EngineName => _engineName;
 
-    internal OfflineRecognizerConfig CreateRecognizerConfiguration(IReadOnlyDictionary<string, string> paths) =>
-        RussianAsrProfile.CreateRecognizerConfig(
-            paths[_gigaDescriptors[0].Id], paths[_gigaDescriptors[1].Id],
+    /// <summary>Только для стенда --asr-eval: подмена пути энкодера. В продакшене всегда null.</summary>
+    internal string? EncoderPathOverride { get; set; }
+
+    /// <summary>Только для стенда --asr-eval: подмена метода декодирования. В продакшене всегда null.</summary>
+    internal string? DecodingMethodOverride { get; set; }
+
+    internal OfflineRecognizerConfig CreateRecognizerConfiguration(IReadOnlyDictionary<string, string> paths)
+    {
+        var config = RussianAsrProfile.CreateRecognizerConfig(
+            EncoderPathOverride ?? paths[_gigaDescriptors[0].Id], paths[_gigaDescriptors[1].Id],
             paths[_gigaDescriptors[2].Id], paths[_gigaDescriptors[3].Id], _inferenceThreads);
+        if (DecodingMethodOverride is { Length: > 0 } method) config.DecodingMethod = method;
+        return config;
+    }
 
     public async Task WarmUpAsync(IProgress<ModelProgress>? progress, CancellationToken cancellationToken)
     {
