@@ -60,13 +60,21 @@ public sealed class VoiceSpectrumAnalyzerTests(ITestOutputHelper output)
         var analyzer = new VoiceSpectrumAnalyzer();
         var bytes = Tone(850);
         var format = WaveFormat.CreateIeeeFloatWaveFormat(48000, 2);
-        for (var i = 0; i < 20; i++) analyzer.Measure(bytes, bytes.Length, format);
+        // Прогрев с запасом: 20 вызовов меньше порога многоуровневой JIT-компиляции (30), и рантайм
+        // мог выполнить повышение уровня и связанные с ним выделения прямо внутри измеряемого цикла.
+        // Устойчивое состояние измеряем несколькими раундами и берём минимум: регрессия с выделением
+        // на кадр аллоцирует в каждом раунде, разовый шум рантайма (JIT, параллельные тесты) — нет.
+        for (var i = 0; i < 300; i++) analyzer.Measure(bytes, bytes.Length, format);
+        var allocated = long.MaxValue;
         var clock = Stopwatch.StartNew();
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 1000; i++) analyzer.Measure(bytes, bytes.Length, format);
-        var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        for (var round = 0; round < 5; round++)
+        {
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var i = 0; i < 1000; i++) analyzer.Measure(bytes, bytes.Length, format);
+            allocated = Math.Min(allocated, GC.GetAllocatedBytesForCurrentThread() - before);
+        }
         clock.Stop();
-        output.WriteLine($"1000 FFT frames: {clock.Elapsed.TotalMilliseconds:F2} ms; managed allocations: {allocated} bytes.");
+        output.WriteLine($"5000 FFT frames: {clock.Elapsed.TotalMilliseconds:F2} ms; minimum managed allocations per 1000 frames: {allocated} bytes.");
         Assert.InRange(allocated, 0, 1024);
     }
 
