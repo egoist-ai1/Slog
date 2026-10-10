@@ -53,6 +53,13 @@ public interface IAudioCaptureService : IDisposable
     Task<AudioCaptureResult> StopAsync(long releaseTimestamp, CancellationToken cancellationToken) =>
         StopAsync(cancellationToken);
     Task<string?> CancelAsync();
+
+    /// <summary>
+    /// Нажатие следующей записи, пока хвост предыдущей ещё дописывается: хвост обрезается по этому
+    /// моменту (Stopwatch.GetTimestamp), а звук после него принадлежит новой записи. Вызывается
+    /// сразу, минуя очередь операций. Реализации без таймстемпов по умолчанию ничего не делают.
+    /// </summary>
+    void CapTail(long pressTimestamp) { }
 }
 
 public sealed record MicrophoneDeviceInfo(

@@ -1351,6 +1351,175 @@ public sealed class AudioCaptureServiceTests(ITestOutputHelper output)
         Assert.Equal(6 / 1000f, result.Samples[0]);
     }
 
+    // ---- Нажатие следующей записи во время хвоста, отмена, шум, запасной режим WASAPI ----
+
+    [Fact]
+    public async Task Press_during_the_tail_gives_the_speech_after_the_press_to_the_next_take_not_the_old_one()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.PushQuiet(10);
+        service.Start(feed.Now);
+        feed.PushTone(0.2f, 10);
+        var stop = service.StopAsync(feed.Now, CancellationToken.None);
+        feed.PushTone(0.2f, 14); // хвост A: 280 мс после отпускания, сигнал не затихает
+
+        var press = feed.Now + Ms(10); // B нажата за 10 мс до конца следующего буфера (на его середине)
+        service.CapTail(press);
+        Assert.False(stop.IsCompleted);
+        var straddling = (feed.Count + 1) / 1000f;
+        feed.PushCoded(1);
+        var first = await stop.WaitAsync(TimeSpan.FromMilliseconds(500));
+
+        // A закончилась ровно на нажатии: 10+10+14 буферов и половина буфера до отметки.
+        Assert.Equal(((10 + 10 + 14) * ChunkSamples) + (ChunkSamples / 2), first.Samples.Length);
+
+        service.Start(press);
+        feed.PushCoded(5);
+        var secondStop = service.StopAsync(feed.Now, CancellationToken.None);
+        feed.PushQuiet(13);
+        var second = await secondStop;
+
+        // B начинается с отметки нажатия (вторая половина буфера), не раньше конца A.
+        Assert.Equal(straddling, second.Samples[0]);
+        Assert.Equal((ChunkSamples / 2) + ((5 + 13) * ChunkSamples), second.Samples.Length);
+    }
+
+    [Fact]
+    public async Task Tail_minimum_is_kept_only_while_the_next_take_is_not_pressed()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.PushQuiet(10);
+        service.Start(feed.Now);
+        feed.PushTone(0.2f, 10);
+        var stop = service.StopAsync(feed.Now, CancellationToken.None);
+
+        feed.PushQuiet(6); // 120 мс после отпускания: меньше минимума 250 мс
+        await Task.Delay(50);
+        Assert.False(stop.IsCompleted);
+
+        service.CapTail(feed.Now); // B нажата именно сейчас: ждать минимум незачем
+        await stop.WaitAsync(TimeSpan.FromMilliseconds(500));
+    }
+
+    [Fact]
+    public async Task Press_before_the_old_take_has_started_still_caps_its_tail()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.PushQuiet(10);
+        service.CapTail(feed.Now + Ms(100)); // нажатие следующей записи пришло раньше Start старой
+        service.Start(feed.Now);
+        feed.PushTone(0.2f, 10);
+        var result = await service.StopAsync(feed.Now, CancellationToken.None).WaitAsync(TimeSpan.FromMilliseconds(500));
+
+        Assert.Equal((10 + 5) * ChunkSamples, result.Samples.Length);
+    }
+
+    [Fact]
+    public async Task Cancelled_take_end_does_not_leak_into_the_pre_roll_of_the_next_take()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.PushCoded(10);
+        service.Start(feed.Now);
+        feed.PushCoded(5); // отменённая фраза
+        await service.CancelAsync();
+        feed.PushCoded(3);
+        var firstAfterCancel = (feed.Count - 3 + 1) / 1000f;
+
+        service.Start(feed.Now - Ms(40)); // pre-roll 500 мс дотянулся бы до отменённого
+        feed.PushCoded(5);
+        var stop = service.StopAsync(feed.Now, CancellationToken.None);
+        feed.PushQuiet(13);
+        var result = await stop;
+
+        Assert.Equal(firstAfterCancel, result.Samples[0]);
+        Assert.Equal((3 + 5 + 13) * ChunkSamples, result.Samples.Length);
+    }
+
+    [Fact]
+    public async Task Digital_zero_buffers_after_open_do_not_drag_the_noise_floor_to_minus_90_db()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.Push(new byte[ChunkSamples * sizeof(float)]); // нулевые буферы сразу после открытия устройства
+        feed.Push(new byte[ChunkSamples * sizeof(float)]);
+        feed.PushTone(0.003f, 10); // реальный шум комнаты (около -50 дБ)
+        service.Start(feed.Now);
+        feed.PushTone(0.2f, 10);
+        var stop = service.StopAsync(feed.Now, CancellationToken.None);
+
+        feed.PushTone(0.003f, 13); // 260 мс шума комнаты: это тишина, хвост должен закончиться
+        var result = await stop.WaitAsync(TimeSpan.FromMilliseconds(500));
+
+        Assert.Equal((12 + 10 + 13) * ChunkSamples, result.Samples.Length);
+    }
+
+    [Fact]
+    public async Task Feedback_suppression_zeroes_the_whole_requested_window_not_only_forty_milliseconds()
+    {
+        var capture = new ControlledCapture();
+        using var rig = new CaptureRig(capture);
+        var feed = new TimedFeed(capture);
+        using var service = rig.CreateService(clock: feed.Clock);
+        feed.PushQuiet(10);
+        service.Start(feed.Now);
+        service.SuppressFeedbackAudio(TimeSpan.FromMilliseconds(200)); // окно сигнала старта
+        feed.PushTone(0.2f, 9);  // до 200 мс: нули
+        feed.PushTone(0.2f, 1);  // после окна: живой звук
+        var stop = service.StopAsync(feed.Now, CancellationToken.None);
+        feed.PushQuiet(13);
+        var result = await stop;
+
+        var window = result.Samples.Skip(10 * ChunkSamples).Take(9 * ChunkSamples);
+        Assert.True(window.All(sample => sample == 0f));
+        Assert.Equal(0.2f, result.Samples[19 * ChunkSamples]);
+    }
+
+    [Fact]
+    public void Event_sync_failure_retries_once_in_the_regular_mode()
+    {
+        var calls = new List<(bool EventSync, int Milliseconds)>();
+        var made = new ControlledCapture();
+
+        var result = AudioCaptureService.CreateCaptureWithFallback((eventSync, milliseconds) =>
+        {
+            calls.Add((eventSync, milliseconds));
+            return eventSync ? throw new InvalidOperationException("driver refused event sync") : made;
+        });
+
+        Assert.Same(made, result);
+        Assert.Equal(2, calls.Count);
+        Assert.True(calls[0].EventSync);
+        Assert.False(calls[1].EventSync);
+    }
+
+    [Fact]
+    public void Working_event_sync_is_not_retried_and_a_second_failure_propagates()
+    {
+        var made = new ControlledCapture();
+        var count = 0;
+        Assert.Same(made, AudioCaptureService.CreateCaptureWithFallback((_, _) => { count++; return made; }));
+        Assert.Equal(1, count);
+
+        count = 0;
+        Assert.Throws<InvalidOperationException>(() => AudioCaptureService.CreateCaptureWithFallback(
+            (_, _) => { count++; throw new InvalidOperationException("device gone"); }));
+        Assert.Equal(2, count);
+    }
+
     private static byte[] SyntheticPcm(float amplitude)
     {
         var bytes = new byte[1600 * sizeof(float)];
