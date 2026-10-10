@@ -12,20 +12,19 @@
         TextOptions.TextRenderingMode="ClearType"
         FontFamily="{StaticResource UiFont}">
     <Window.Resources>
-        <CubicEase x:Key="DirectEase" EasingMode="EaseOut" />
-
+      <ResourceDictionary>
+        <ResourceDictionary.MergedDictionaries>
+            <ResourceDictionary Source="MotionTokens.xaml" />
+        </ResourceDictionary.MergedDictionaries>
         <!--
             Fluent motion uses opposite curves for the two directions: something arriving
             decelerates into place, something leaving accelerates away. The exit animation
             previously had no easing at all, which is why dismissal read as a cut rather than
             a movement.
         -->
-        <KeySpline x:Key="DecelerateSpline">0.16,1.0 0.3,1.0</KeySpline>
-        <KeySpline x:Key="AccelerateSpline">0.7,0.0 1.0,0.5</KeySpline>
-        <KeySpline x:Key="MorphSpline">0.16,1.0 0.3,1.0</KeySpline>
 
         <!-- One staggered processing rhythm; the orbit is reserved for model transfer. -->
-        <Storyboard x:Key="SpinStoryboard" RepeatBehavior="Forever" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="SpinStoryboard" RepeatBehavior="Forever">
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="SpinnerOrbitRotate"
                                            Storyboard.TargetProperty="Angle">
                 <SplineDoubleKeyFrame KeyTime="0:0:0" Value="0" />
@@ -33,7 +32,7 @@
                 <SplineDoubleKeyFrame KeyTime="0:0:1.1" Value="360" KeySpline="0.4,0.0 0.2,1.0" />
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
-        <Storyboard x:Key="ProcessingStoryboard" RepeatBehavior="Forever" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="ProcessingStoryboard" RepeatBehavior="Forever">
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ProcessingDot1" Storyboard.TargetProperty="Opacity">
                 <SplineDoubleKeyFrame KeyTime="0:0:0" Value="0.25" />
                 <SplineDoubleKeyFrame KeyTime="0:0:0.22" Value="1.0" />
@@ -83,7 +82,7 @@
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
 
-        <Storyboard x:Key="ListenPulseStoryboard" RepeatBehavior="Forever" AutoReverse="True" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="ListenPulseStoryboard" RepeatBehavior="Forever" AutoReverse="True">
             <DoubleAnimation Storyboard.TargetName="StateHalo" Storyboard.TargetProperty="Opacity"
                              From="0.08" To="0.28" Duration="0:0:1.3">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
@@ -98,7 +97,7 @@
             </DoubleAnimation>
         </Storyboard>
 
-        <Storyboard x:Key="DownloadStoryboard" RepeatBehavior="Forever" AutoReverse="True" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="DownloadStoryboard" RepeatBehavior="Forever" AutoReverse="True">
             <DoubleAnimation Storyboard.TargetName="DownloadArrowOffset" Storyboard.TargetProperty="Y"
                              From="-0.8" To="0.8" Duration="0:0:0.62">
                 <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
@@ -107,103 +106,79 @@
                              From="0.68" To="1" Duration="0:0:0.62" />
         </Storyboard>
 
-        <Storyboard x:Key="SuccessStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="SuccessStoryboard">
             <DoubleAnimation Storyboard.TargetName="CheckScale" Storyboard.TargetProperty="ScaleX"
-                             From="0.45" To="1" Duration="0:0:0.18">
+                             From="0.45" To="1" Duration="{StaticResource MotionDisc}">
                 <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.25" /></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
             <DoubleAnimation Storyboard.TargetName="CheckScale" Storyboard.TargetProperty="ScaleY"
-                             From="0.45" To="1" Duration="0:0:0.18">
+                             From="0.45" To="1" Duration="{StaticResource MotionDisc}">
                 <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.25" /></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
             <DoubleAnimation Storyboard.TargetName="SuccessFlash" Storyboard.TargetProperty="Opacity"
-                             From="0.28" To="0" Duration="0:0:0.35">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="0.28" To="0" Duration="0:0:0.35" EasingFunction="{StaticResource MotionEaseOut}" />
         </Storyboard>
 
         <!-- Появление: прозрачность 0→1 за 90 мс, масштаб 0,94→1, сдвиг по Y 6→0, ease-out. -->
-        <Storyboard x:Key="EnterStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="EnterStoryboard">
             <DoubleAnimation Storyboard.TargetName="ShellScale" Storyboard.TargetProperty="ScaleX"
-                             From="0.94" To="1" Duration="0:0:0.09">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="0.94" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="ShellScale" Storyboard.TargetProperty="ScaleY"
-                             From="0.94" To="1" Duration="0:0:0.09">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="0.94" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="ShellTranslate" Storyboard.TargetProperty="Y"
-                             From="6" To="0" Duration="0:0:0.09">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="6" To="0" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="0:0:0.09">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="0" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="0:0:0.09">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="0" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
         </Storyboard>
 
         <!-- «Уменьшить движение»: только прозрачность, 80 мс. -->
-        <Storyboard x:Key="EnterReducedStoryboard" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="EnterReducedStoryboard">
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="0:0:0.08" />
+                             From="0" To="1" Duration="{StaticResource MotionReduced}" />
             <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="0:0:0.08" />
+                             From="0" To="1" Duration="{StaticResource MotionReduced}" />
         </Storyboard>
 
         <!-- Уход: 140 мс, масштаб 0,96, сдвиг по Y +4, ease-in. -->
-        <Storyboard x:Key="ExitStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="ExitStoryboard">
             <DoubleAnimation Storyboard.TargetName="ShellScale" Storyboard.TargetProperty="ScaleX"
-                             To="0.96" Duration="0:0:0.14">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             To="0.96" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
             <DoubleAnimation Storyboard.TargetName="ShellScale" Storyboard.TargetProperty="ScaleY"
-                             To="0.96" Duration="0:0:0.14">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             To="0.96" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
             <DoubleAnimation Storyboard.TargetName="ShellTranslate" Storyboard.TargetProperty="Y"
-                             To="4" Duration="0:0:0.14">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             To="4" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="0:0:0.14">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             To="0" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
             <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="0:0:0.14" />
+                             To="0" Duration="{StaticResource MotionExit}" />
         </Storyboard>
 
-        <Storyboard x:Key="ExitReducedStoryboard" Timeline.DesiredFrameRate="30">
+        <Storyboard x:Key="ExitReducedStoryboard">
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="0:0:0.08" />
+                             To="0" Duration="{StaticResource MotionReduced}" />
             <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="0:0:0.08" />
+                             To="0" Duration="{StaticResource MotionReduced}" />
         </Storyboard>
 
         <!-- «Можно говорить»: одно кольцо расходится от диска, 280 мс. -->
-        <Storyboard x:Key="StartRingStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="StartRingStoryboard">
             <DoubleAnimation Storyboard.TargetName="StartRingScale" Storyboard.TargetProperty="ScaleX"
-                             From="1" To="1.6" Duration="0:0:0.28">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="1" To="1.6" Duration="{StaticResource MotionRing}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="StartRingScale" Storyboard.TargetProperty="ScaleY"
-                             From="1" To="1.6" Duration="0:0:0.28">
-                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
+                             From="1" To="1.6" Duration="{StaticResource MotionRing}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="StartRing" Storyboard.TargetProperty="Opacity"
-                             From="0.35" To="0" Duration="0:0:0.28" />
+                             From="0.35" To="0" Duration="{StaticResource MotionRing}" />
         </Storyboard>
 
         <!-- Хвост ещё пишется: дуга вокруг диска сжимается (длина окружности 59,7 толщин штриха). -->
-        <Storyboard x:Key="TailArcStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="TailArcStoryboard">
             <DoubleAnimation Storyboard.TargetName="TailArc" Storyboard.TargetProperty="StrokeDashOffset"
                              From="0" To="59.7" Duration="0:0:0.6" />
         </Storyboard>
 
-        <Storyboard x:Key="ErrorStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="ErrorStoryboard">
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ShellTranslate" Storyboard.TargetProperty="X">
                 <EasingDoubleKeyFrame Value="0" KeyTime="0:0:0" />
                 <EasingDoubleKeyFrame Value="-3" KeyTime="0:0:0.05" />
@@ -213,23 +188,23 @@
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
 
-        <Storyboard x:Key="StateTransitionStoryboard" Timeline.DesiredFrameRate="60">
+        <Storyboard x:Key="StateTransitionStoryboard">
             <DoubleAnimation Storyboard.TargetName="CenterContent" Storyboard.TargetProperty="Opacity"
-                             From="0.20" To="1" Duration="0:0:0.16"
-                             EasingFunction="{StaticResource DirectEase}" />
+                             From="0.20" To="1" Duration="{StaticResource MotionContent}"
+                             EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="StateContentTranslate" Storyboard.TargetProperty="X"
-                             From="4" To="0" Duration="0:0:0.18"
-                             EasingFunction="{StaticResource DirectEase}" />
+                             From="4" To="0" Duration="{StaticResource MotionDisc}"
+                             EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="StateDisc" Storyboard.TargetProperty="Opacity"
-                             From="0.25" To="1" Duration="0:0:0.18"
-                             EasingFunction="{StaticResource DirectEase}" />
+                             From="0.25" To="1" Duration="{StaticResource MotionDisc}"
+                             EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="StateDiscScale" Storyboard.TargetProperty="ScaleX">
                 <SplineDoubleKeyFrame KeyTime="0:0:0" Value="0.86" />
-                <SplineDoubleKeyFrame KeyTime="0:0:0.18" Value="1" KeySpline="{StaticResource DecelerateSpline}" />
+                <SplineDoubleKeyFrame KeyTime="0:0:0.18" Value="1" KeySpline="{StaticResource MotionDecelerateSpline}" />
             </DoubleAnimationUsingKeyFrames>
             <DoubleAnimationUsingKeyFrames Storyboard.TargetName="StateDiscScale" Storyboard.TargetProperty="ScaleY">
                 <SplineDoubleKeyFrame KeyTime="0:0:0" Value="0.86" />
-                <SplineDoubleKeyFrame KeyTime="0:0:0.18" Value="1" KeySpline="{StaticResource DecelerateSpline}" />
+                <SplineDoubleKeyFrame KeyTime="0:0:0.18" Value="1" KeySpline="{StaticResource MotionDecelerateSpline}" />
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
 
@@ -324,6 +299,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
+      </ResourceDictionary>
     </Window.Resources>
 
     <Grid>
@@ -385,7 +361,7 @@
                         <BeginStoryboard>
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="Opacity"
-                                                 To="1" Duration="0:0:0.167" />
+                                                 To="1" Duration="{StaticResource MotionContent}" />
                             </Storyboard>
                         </BeginStoryboard>
                     </EventTrigger>
@@ -393,7 +369,7 @@
                         <BeginStoryboard>
                             <Storyboard>
                                 <DoubleAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="Opacity"
-                                                 To="0" Duration="0:0:0.167" />
+                                                 To="0" Duration="{StaticResource MotionContent}" />
                             </Storyboard>
                         </BeginStoryboard>
                     </EventTrigger>

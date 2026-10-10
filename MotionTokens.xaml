@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Единый словарь движения Слога. Значения дублируются в Controls/Motion.cs;
+        тест MotionTokensTests следит, чтобы они совпадали.
+        90 появление, 140 уход, 160 контент, 180 диск, 280 кольцо, 80 reduced motion.
+    -->
+    <Duration x:Key="MotionEnter">0:0:0.09</Duration>
+    <Duration x:Key="MotionExit">0:0:0.14</Duration>
+    <Duration x:Key="MotionContent">0:0:0.16</Duration>
+    <Duration x:Key="MotionDisc">0:0:0.18</Duration>
+    <Duration x:Key="MotionRing">0:0:0.28</Duration>
+    <Duration x:Key="MotionReduced">0:0:0.08</Duration>
+
+    <!-- Прибытие замедляется, уход ускоряется (Fluent). -->
+    <CubicEase x:Key="MotionEaseOut" EasingMode="EaseOut" />
+    <CubicEase x:Key="MotionEaseIn" EasingMode="EaseIn" />
+    <KeySpline x:Key="MotionDecelerateSpline">0.16,1.0 0.3,1.0</KeySpline>
+    <KeySpline x:Key="MotionAccelerateSpline">0.7,0.0 1.0,0.5</KeySpline>
+</ResourceDictionary>
