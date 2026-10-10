@@ -93,7 +93,7 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
             await WarmUpCoreAsync(null, cancellationToken).ConfigureAwait(false);
             ObjectDisposedException.ThrowIf(_disposed, this);
             // Even a fully warm engine must not do long-audio chunk planning on the WPF dispatcher.
-            var chunks = await Task.Run(() => GigaAmAudioChunker.Split(samples, sampleRate), cancellationToken)
+            var chunks = await Task.Run(() => GigaAmAudioChunker.Split(QuietSpeechNormalizer.Apply(samples), sampleRate), cancellationToken)
                 .ConfigureAwait(false);
             var decoded = new List<DecodedAudioChunk>(chunks.Count);
             var format = FormatSpeechPunctuation;
@@ -130,7 +130,7 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
                 foreach (var chunk in AudioSampleReader.ReadChunks(audioPath, cancellationToken))
                 {
                     progress?.Report(new ModelProgress("Распознаю и оформляю", null));
-                    var value = await DecodeChunkAsync(GigaAmTranscriptionService.GetEngineSamples(chunk.Samples), format, cancellationToken)
+                    var value = await DecodeChunkAsync(QuietSpeechNormalizer.Apply(GigaAmTranscriptionService.GetEngineSamples(chunk.Samples)), format, cancellationToken)
                         .ConfigureAwait(false);
                     if (!string.IsNullOrWhiteSpace(value))
                         decoded.Add(new DecodedAudioChunk(value, chunk.ParagraphBreakBefore));
