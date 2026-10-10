@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -19,7 +20,8 @@ public sealed class GlobalHotkeyService : IDisposable
     private readonly DispatcherTimer _releasePoller;
     private readonly KeyboardShortcut _shortcut;
     private readonly int _hotkeyId;
-    private bool _isHeld;
+    // Отпускание применяется с задержкой ReleaseDebounceMs: повторное WM_HOTKEY за это время — дребезг.
+    private readonly ButtonDebounce _debounce = new();
     private bool _disposed;
 
     public GlobalHotkeyService(nint windowHandle, KeyboardShortcut shortcut)
@@ -57,20 +59,31 @@ public sealed class GlobalHotkeyService : IDisposable
         AppLog.Write("RegisterHotKey succeeded");
     }
 
-    public event EventHandler? Pressed;
-    public event EventHandler? Released;
+    // Тип аргументов наследует EventArgs: подписчики с сигнатурой (object?, EventArgs) работают как раньше.
+    public event EventHandler<PushToTalkEventArgs>? Pressed;
+    public event EventHandler<PushToTalkEventArgs>? Released;
 
     private nint WindowProc(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
         if (message == WmHotkey && wParam == _hotkeyId)
         {
+            // Отметка первой: pre-roll захвата отсчитывается от неё.
+            var timestamp = Stopwatch.GetTimestamp();
             AppLog.Write("WM_HOTKEY received");
             handled = true;
-            if (!_isHeld)
+
+            // Созревшее отпускание, которое опрос ещё не успел подтвердить, фиксируем до нового нажатия.
+            CommitReleaseIfDue(timestamp);
+
+            switch (_debounce.OnDown(timestamp))
             {
-                _isHeld = true;
-                Pressed?.Invoke(this, EventArgs.Empty);
-                _releasePoller.Start();
+                case DebounceDownResult.Press:
+                    Pressed?.Invoke(this, new PushToTalkEventArgs(timestamp, 0));
+                    _releasePoller.Start();
+                    break;
+                case DebounceDownResult.Bounce:
+                    AppLog.Write("Hotkey bounce ignored; keeping the recording");
+                    break;
             }
         }
         return 0;
@@ -78,17 +91,42 @@ public sealed class GlobalHotkeyService : IDisposable
 
     private void OnReleasePoll(object? sender, EventArgs args)
     {
+        if (!_debounce.IsHeld)
+        {
+            _releasePoller.Stop();
+            return;
+        }
+
+        var now = Stopwatch.GetTimestamp();
+        if (_debounce.ReleasePending)
+        {
+            CommitReleaseIfDue(now);
+            return;
+        }
+
         // Wait until the whole configured chord is released. This prevents a
         // still-held modifier from changing the automatic Ctrl+V delivery.
-        if (!_isHeld || _shortcut.HeldVirtualKeys().Any(IsKeyDown))
+        if (_shortcut.HeldVirtualKeys().Any(IsKeyDown))
         {
             return;
         }
 
-        _isHeld = false;
+        // Опрос идёт каждые 16 мс, поэтому отметка отпускания отстаёт от реального не больше чем на это.
+        _debounce.OnUp(now);
+    }
+
+    private void CommitReleaseIfDue(long now)
+    {
+        if (!_debounce.TryCommitRelease(now, out var args))
+        {
+            return;
+        }
+
         _releasePoller.Stop();
-        AppLog.Write("Hotkey release detected");
-        Released?.Invoke(this, EventArgs.Empty);
+        AppLog.Write(args.IsShortTap
+            ? $"Hotkey release detected (short tap {args.HeldMilliseconds:0} ms)"
+            : "Hotkey release detected");
+        Released?.Invoke(this, args);
     }
 
     private static bool IsKeyDown(int virtualKey) => (GetAsyncKeyState(virtualKey) & 0x8000) != 0;
@@ -100,7 +138,7 @@ public sealed class GlobalHotkeyService : IDisposable
             return;
         }
         _disposed = true;
-        _isHeld = false;
+        _debounce.Reset();
         _releasePoller.Stop();
         AppLog.Write("Unregistering hotkey");
         UnregisterHotKey(_windowHandle, _hotkeyId);
