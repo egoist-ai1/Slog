@@ -503,7 +503,7 @@ public static class CorpusBenchmark
             nameof(HybridTranscriptionService),
             GigaAmTranscriptionService.BenchmarkSampleRate,
             AudioCaptureService.PreRollDuration.TotalMilliseconds,
-            AudioCaptureService.ReleaseTailDuration.TotalMilliseconds,
+            AudioCaptureService.ReleaseTailMinimum.TotalMilliseconds,
             GigaAmTranscriptionService.BenchmarkDecodeThreads,
             GigaAmTranscriptionService.BenchmarkBatchDecodeThreshold,
             GigaAmTranscriptionService.BenchmarkMaxBatchSize,

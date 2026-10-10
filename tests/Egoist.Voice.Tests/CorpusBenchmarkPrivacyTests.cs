@@ -242,8 +242,8 @@ public sealed class CorpusBenchmarkPrivacyTests
 
         Assert.Equal("HybridTranscriptionService", parameters.Pipeline);
         Assert.Equal(16_000, parameters.InputSampleRateHz);
-        Assert.Equal(320, parameters.CapturePreRollMs);
-        Assert.Equal(350, parameters.CaptureReleaseTailMs);
+        Assert.Equal(500, parameters.CapturePreRollMs);
+        Assert.Equal(250, parameters.CaptureReleaseTailMs);
         Assert.True(parameters.GigaAmThreads > 0);
         Assert.False(parameters.GigaAmContextualBias);
         Assert.Null(parameters.GigaAmHotwordVersion);
