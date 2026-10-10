@@ -24,6 +24,117 @@ public sealed class CapsuleAnimationCadenceTests
         Assert.InRange(accepted, 119, 121);
     }
 
+    [Theory]
+    [InlineData(60, 60)]
+    [InlineData(120, 120)]
+    [InlineData(144, 144)]
+    [InlineData(240, 144)]
+    [InlineData(165, 144)]
+    public void Target_rate_follows_min_of_refresh_and_144(int refreshRate, int expectedRate)
+    {
+        Assert.Equal(expectedRate, Motion.ResolveFrameRate(refreshRate));
+        var cadence = new CapsuleAnimationCadence { TargetFps = Motion.ResolveFrameRate(refreshRate) };
+        var accepted = 0;
+        for (var frame = 0; frame < refreshRate * 2; frame++)
+        {
+            if (cadence.TryAdvance(TimeSpan.FromSeconds((double)frame / refreshRate), false, out _))
+                accepted++;
+        }
+        Assert.InRange(accepted, expectedRate * 2 - 3, expectedRate * 2 + 3);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void Unknown_refresh_falls_back_to_sixty(int refreshRate) =>
+        Assert.Equal(60, Motion.ResolveFrameRate(refreshRate));
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(120)]
+    [InlineData(144)]
+    public void Wave_time_is_independent_of_the_frame_rate(int refreshRate)
+    {
+        var cadence = new CapsuleAnimationCadence { TargetFps = refreshRate };
+        var total = 0d;
+        var last = 0d;
+        for (var frame = 0; frame <= refreshRate * 3; frame++)
+        {
+            var now = (double)frame / refreshRate;
+            if (cadence.TryAdvance(TimeSpan.FromSeconds(now), false, out var delta) && frame > 0)
+            {
+                total += delta;
+                last = now;
+            }
+        }
+        // Фаза растёт по реальным секундам: сумма шагов равна прошедшему времени при любой частоте.
+        Assert.InRange(total, last - 0.02, last + 0.02);
+        Assert.InRange(total, 2.95, 3.01);
+    }
+
+    [Fact]
+    public void Frame_drops_do_not_jerk_the_phase()
+    {
+        var cadence = new CapsuleAnimationCadence { TargetFps = 120 };
+        cadence.TryAdvance(TimeSpan.Zero, false, out _);
+        // Кадр пропущен (3 интервала): шаг растёт пропорционально времени, а не остаётся «кадровым».
+        Assert.True(cadence.TryAdvance(TimeSpan.FromSeconds(3d / 120), false, out var delta));
+        Assert.Equal(3d / 120, delta, precision: 4);
+    }
+
+    [Fact]
+    public void Target_rate_can_change_between_takes_without_losing_the_clock()
+    {
+        var cadence = new CapsuleAnimationCadence { TargetFps = 60 };
+        Assert.True(cadence.TryAdvance(TimeSpan.Zero, false, out _));
+        cadence.TargetFps = 144;
+        Assert.True(cadence.TryAdvance(TimeSpan.FromSeconds(1d / 144), false, out var delta));
+        Assert.InRange(delta, 1d / 240, 1d / 60);
+    }
+
+    [Fact]
+    public void Frame_stats_report_percentiles_and_slow_frames()
+    {
+        var stats = new FrameIntervalStats();
+        var time = TimeSpan.Zero;
+        for (var frame = 0; frame < 200; frame++)
+        {
+            stats.Record(time);
+            stats.Record(time); // повтор события с тем же временем не считается кадром
+            time += TimeSpan.FromMilliseconds(frame == 100 ? 30 : 1000d / 120);
+        }
+        var summary = stats.Summarize(120);
+        Assert.NotNull(summary);
+        Assert.Contains("frames=200", summary);
+        Assert.Contains("p50=8.33ms", summary);
+        Assert.Contains("slow(>1.5x)=1", summary);
+        stats.Reset();
+        Assert.Null(stats.Summarize(120));
+    }
+
+    [Fact]
+    public void Motion_tokens_in_xaml_match_the_code_constants()
+    {
+        var root = AppContext.BaseDirectory;
+        while (root is not null && !File.Exists(Path.Combine(root, "MotionTokens.xaml")))
+            root = Path.GetDirectoryName(root);
+        Assert.NotNull(root);
+        var xaml = File.ReadAllText(Path.Combine(root, "MotionTokens.xaml"));
+        void Check(string key, int milliseconds)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(xaml, $"x:Key=\"{key}\">0:0:([0-9.]+)<");
+            Assert.True(match.Success, key);
+            Assert.Equal(milliseconds, (int)Math.Round(double.Parse(match.Groups[1].Value,
+                System.Globalization.CultureInfo.InvariantCulture) * 1000));
+        }
+        Check("MotionEnter", Motion.EnterMs);
+        Check("MotionExit", Motion.ExitMs);
+        Check("MotionContent", Motion.ContentMs);
+        Check("MotionDisc", Motion.DiscMs);
+        Check("MotionRing", Motion.RingMs);
+        Check("MotionReduced", Motion.ReducedMs);
+    }
+
     [Fact]
     public void Duplicate_composition_events_are_ignored_even_at_time_zero()
     {

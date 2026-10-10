@@ -18,6 +18,12 @@ public sealed class CapsuleWaveform : FrameworkElement
     private const int Bars = 44;
     private readonly double[] _peaks = new double[Bars];
     private double _drift;
+    // Время, накопленное с прошлой отрисовки: дрейф и падение пиков идут по секундам, а не по кадрам.
+    private double _elapsedSinceRender;
+    private bool _peaksFalling;
+    private readonly System.Windows.Point[] _tops = new System.Windows.Point[Bars];
+    private const double DriftPerSecond = 3.0;
+    private const double PeakFallPixelsPerSecond = 33.0;
 
     public CapsuleWaveform()
     {
@@ -47,6 +53,7 @@ public sealed class CapsuleWaveform : FrameworkElement
     public void Advance(double level, double phase, double deltaSeconds, bool reducedMotion,
         double bass = 0, double mid = 0, double treble = 0, VoiceSpectrum spectrum = default)
     {
+        _elapsedSinceRender = Math.Min(_elapsedSinceRender + deltaSeconds, 1.0);
         for (var index = 0; index < _levels.Length; index++)
         {
             var target = CapsuleWaveformProfile.TargetScale(
@@ -59,6 +66,13 @@ public sealed class CapsuleWaveform : FrameworkElement
 
     private void RequestRedrawIfChanged()
     {
+        // Пики ещё опускаются: нужен кадр, даже если уровни уже осели.
+        if (_peaksFalling)
+        {
+            RedrawRequestCount++;
+            InvalidateVisual();
+            return;
+        }
         // Sub-pixel settling and silence do not need a new retained drawing on every tick.
         var height = ActualHeight > 0 ? ActualHeight : CapsuleWaveformProfile.BarHeight;
         for (var index = 0; index < _levels.Length; index++)
@@ -102,12 +116,16 @@ public sealed class CapsuleWaveform : FrameworkElement
     protected override void OnRender(DrawingContext drawingContext)
     {
         if (ActualWidth <= 0 || ActualHeight <= 0) return;
-        _drift += 0.05;
+        var elapsed = _elapsedSinceRender;
+        _elapsedSinceRender = 0;
+        _drift += DriftPerSecond * elapsed;
+        var peakFall = PeakFallPixelsPerSecond * elapsed;
+        var peaksFalling = false;
         var cell = ActualWidth / Bars;
         var centre = ActualHeight / 2;
         var width = _highContrast ? Math.Min(4, cell * 0.6) : Math.Max(1.8, cell * 0.58);
-        var contrast = System.Windows.SystemColors.WindowTextBrush;
-        var tops = new System.Windows.Point[Bars];
+        var contrast = _highContrast ? System.Windows.SystemColors.WindowTextBrush : BarBrush;
+        var tops = _tops;
         var loudest = 0d;
         for (var bar = 0; bar < Bars; bar++)
         {
@@ -116,8 +134,9 @@ public sealed class CapsuleWaveform : FrameworkElement
             var half = Math.Max(1.1, level * ActualHeight / 2);
             var x = cell * (bar + 0.5);
             tops[bar] = new System.Windows.Point(x, centre - half);
-            _peaks[bar] = Math.Max(half, _peaks[bar] - 0.55);
-            drawingContext.DrawRoundedRectangle(_highContrast ? contrast : BarBrush, null,
+            _peaks[bar] = Math.Max(half, _peaks[bar] - peakFall);
+            if (_peaks[bar] - half > 0.05) peaksFalling = true;
+            drawingContext.DrawRoundedRectangle(contrast, null,
                 new Rect(x - width / 2, centre - half, width, half * 2), width / 2, width / 2);
             if (_highContrast) continue;
             if (half > 3)
@@ -132,24 +151,28 @@ public sealed class CapsuleWaveform : FrameworkElement
                 drawingContext.DrawRectangle(PeakBrush, null, new Rect(x - width / 2, centre + peak, width, 1.2));
             }
         }
+        _peaksFalling = peaksFalling && !_highContrast;
         if (_highContrast) return;
         if (loudest < 0.2) drawingContext.DrawLine(AxisPen, new System.Windows.Point(cell * 0.5, centre), new System.Windows.Point(ActualWidth - cell * 0.5, centre));
-        DrawContour(drawingContext, tops, centre, mirrored: false);
-        DrawContour(drawingContext, tops, centre, mirrored: true);
+        DrawContour(drawingContext, tops, centre);
     }
 
-    private static void DrawContour(DrawingContext context, System.Windows.Point[] tops, double centre, bool mirrored)
+    /// <summary>Верхний и зеркальный контур одной геометрией: одна команда рисования вместо двух.</summary>
+    private static void DrawContour(DrawingContext context, System.Windows.Point[] tops, double centre)
     {
         var geometry = new StreamGeometry();
         using (var g = geometry.Open())
         {
-            g.BeginFigure(Mirror(tops[0], centre, mirrored), false, false);
-            for (var i = 1; i < tops.Length; i++)
+            foreach (var mirrored in new[] { false, true })
             {
-                var previous = Mirror(tops[i - 1], centre, mirrored);
-                var current = Mirror(tops[i], centre, mirrored);
-                var middle = (previous.X + current.X) / 2;
-                g.BezierTo(new System.Windows.Point(middle, previous.Y), new System.Windows.Point(middle, current.Y), current, true, true);
+                g.BeginFigure(Mirror(tops[0], centre, mirrored), false, false);
+                for (var i = 1; i < tops.Length; i++)
+                {
+                    var previous = Mirror(tops[i - 1], centre, mirrored);
+                    var current = Mirror(tops[i], centre, mirrored);
+                    var middle = (previous.X + current.X) / 2;
+                    g.BezierTo(new System.Windows.Point(middle, previous.Y), new System.Windows.Point(middle, current.Y), current, true, true);
+                }
             }
         }
         geometry.Freeze();

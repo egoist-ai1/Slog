@@ -8,6 +8,7 @@
         Background="{DynamicResource AppBackgroundBrush}"
         Foreground="{DynamicResource AppTextPrimaryBrush}"
         FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
         KeyDown="Window_OnKeyDown">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="32" ResizeBorderThickness="6"

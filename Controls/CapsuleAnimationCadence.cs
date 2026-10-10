@@ -1,18 +1,33 @@
 namespace Egoist.Voice.Controls;
 
-/// <summary>Budgets meter work independently of the display refresh rate.</summary>
+/// <summary>Такт волны: min(частота монитора, 144) Гц; скорость движения не зависит от fps (шаг считается по реальному времени).</summary>
 internal sealed class CapsuleAnimationCadence
 {
+    private int _targetFps = Motion.FallbackFrameRate;
     private bool _started;
     private bool _reducedMotion;
     private TimeSpan _lastFrame;
     private TimeSpan _nextFrame;
 
+    /// <summary>Целевая частота обновлений; смена сохраняет фазу сетки кадров и действует со следующего кадра.</summary>
+    internal int TargetFps
+    {
+        get => _targetFps;
+        set
+        {
+            var fps = Math.Clamp(value, 30, Motion.MaxFrameRate);
+            if (fps == _targetFps) return;
+            _targetFps = fps;
+            // Сетка кадров привязана к последнему принятому кадру: новый интервал считается от него.
+            if (_started && !_reducedMotion) _nextFrame = _lastFrame + TimeSpan.FromSeconds(1d / fps);
+        }
+    }
+
     internal void Reset() => _started = false;
 
     internal bool TryAdvance(TimeSpan renderingTime, bool reducedMotion, out double deltaSeconds)
     {
-        var interval = TimeSpan.FromSeconds(reducedMotion ? 0.1 : 1d / 60d);
+        var interval = TimeSpan.FromSeconds(reducedMotion ? 0.1 : 1d / _targetFps);
         deltaSeconds = 0;
         if (!_started || _reducedMotion != reducedMotion || renderingTime < _lastFrame)
         {
@@ -23,13 +38,14 @@ internal sealed class CapsuleAnimationCadence
             deltaSeconds = interval.TotalSeconds;
             return true;
         }
-        if (renderingTime < _nextFrame) return false;
+        // Четверть интервала запаса: кадры монитора с джиттером в тики не должны выпадать через один.
+        if (renderingTime + interval / 4 < _nextFrame) return false;
 
         deltaSeconds = Math.Clamp((renderingTime - _lastFrame).TotalSeconds, 1d / 240d,
             reducedMotion ? 0.2 : 0.05);
         _lastFrame = renderingTime;
-        // Keep the phase on 144 Hz displays; setting next = now + interval would fall to 48 fps.
-        // After a pause skip missed frames in one step instead of producing a catch-up burst.
+        // Сетка кадров остаётся на месте: next = now + interval уронил бы 144 Гц до 48 fps.
+        // После паузы пропущенные кадры отбрасываются одним шагом, без «догоняющей» серии.
         var skippedIntervals = (renderingTime - _nextFrame).Ticks / interval.Ticks + 1;
         _nextFrame += TimeSpan.FromTicks(skippedIntervals * interval.Ticks);
         return true;
