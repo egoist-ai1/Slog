@@ -146,6 +146,7 @@ public partial class MainWindow : Window, IDisposable
         ApplyDictationSettings();
 
         BuildWaveform();
+        InitializeMotionRate();
         _audioCapture.LevelChanged += OnAudioLevelChanged;
         _audioCapture.TimbreChanged += OnAudioTimbreChanged;
         _audioCapture.StateChanged += OnAudioCaptureStateChanged;
@@ -820,6 +821,8 @@ public partial class MainWindow : Window, IDisposable
         NativeMethods.ReassertTopmost(handle);
         if (!wasVisible)
         {
+            ApplyMotionFrameRate();
+            BeginFrameStats();
             if (IsReducedMotion)
             {
                 // «Уменьшить движение»: только прозрачность, 80 мс.
@@ -860,6 +863,7 @@ public partial class MainWindow : Window, IDisposable
             _hideRequested = false;
             _forceHideAfterCancellation = false;
             _displayingBackgroundModelProgress = false;
+            EndFrameStats();
             Hide();
         }
     }
@@ -988,6 +992,7 @@ public partial class MainWindow : Window, IDisposable
         }
 
         AppLog.Write($"Capsule DPI changed: {oldDpi.DpiScaleX:0.##} -> {newDpi.DpiScaleX:0.##}");
+        ApplyMotionFrameRate();
         InvalidateCapsuleChrome();
 
         // Deferred: Windows sends WM_DPICHANGED with a suggested rectangle and expects WPF to
