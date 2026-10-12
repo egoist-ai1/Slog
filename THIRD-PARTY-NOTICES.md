@@ -12,7 +12,7 @@ Egoist Voice распространяется вместе с речевыми �
 Источники: https://github.com/facebook/react и https://github.com/electron/electron.
 
 Компактная версия Portable RU включает GigaAM, sherpa-onnx, ONNX Runtime,
-NAudio и .NET. Нативные Whisper, CUDA, Vulkan и движок перевода в неё не входят.
+NAudio и .NET. Нативные CUDA, Vulkan и движок перевода в неё не входят.
 Текстовая Qwen устанавливается отдельно от Portable; источник закреплённой модели:
 https://huggingface.co/Qwen/Qwen3-4B-GGUF/tree/bc640142c66e1fdd12af0bd68f40445458f3869b
 
@@ -35,13 +35,6 @@ https://huggingface.co/Qwen/Qwen3-4B-GGUF/tree/bc640142c66e1fdd12af0bd68f4044545
 
 Managed bindings sherpa-onnx включены как исходный UTF-8 fork `Egoist.Sherpa.Onnx.Utf8` 1.13.4.1, Apache-2.0, из commit `142807252687d81b40d6315f23470a1512a00de3`. Изменены Windows-маршалинг строк и проверки нулевых native handles; исходный публичный API сохранён. Native CAPI — официальный `sherpa-onnx-v1.13.4-win-x64-shared-MT-Release-no-tts-lib.tar.bz2`, SHA256 `9fd2bdb7fca85120e1e2099acb775c0079bdc1cd4c8d3de9a9eaee86394eb83e`. Синтез речи отключён; исходный GigaAM frontend сохранён. ONNX Runtime 1.27.0 берётся из hash-pinned runtime.win-x64 1.13.4; NuGet CAPI исключён. Native manifest и полные сторонние уведомления находятся в `vendor/sherpa-native-asr/1.13.4` и поставляются в `licenses/native-asr`. Исходники, patch и pinned manifest доступны в `vendor/sherpa-managed-utf8/1.13.4`; LICENSE, patch и manifest поставляются в `licenses/`. Экспериментальный исправленный frontend не входит в эту поставку.
 
-### Whisper large-v3-turbo — фолбэк для смешанной русско-английской речи
-
-- Автор модели: OpenAI
-- Формат GGML: https://github.com/ggml-org/whisper.cpp
-- Лицензия: **MIT**
-
-Установщик кладёт `ggml-large-v3-turbo-q5_0.bin` туда же.
 
 ---
 
@@ -51,24 +44,9 @@ Managed bindings sherpa-onnx включены как исходный UTF-8 fork
 |---|---|---|---|
 | sherpa-onnx (`org.k2fsa.sherpa.onnx`) | рантайм GigaAM | Apache-2.0 | https://github.com/k2-fsa/sherpa-onnx |
 | ONNX Runtime | исполнение ONNX-моделей | MIT | https://github.com/microsoft/onnxruntime |
-| Whisper.net | биндинг whisper.cpp для .NET | MIT | https://github.com/sandrohanea/whisper.net |
-| whisper.cpp | инференс Whisper | MIT | https://github.com/ggml-org/whisper.cpp |
 | NAudio | захват звука | MIT | https://github.com/naudio/NAudio |
 | .NET 8 | среда исполнения | MIT | https://github.com/dotnet/runtime |
 | Inno Setup | сборка установщика | модифицированная BSD | https://jrsoftware.org/isinfo.php |
-
----
-
-## NVIDIA CUDA Runtime
-
-Установщик включает `cublas64_13.dll`, `cublasLt64_13.dll` и `cudart64_13.dll` — компоненты
-NVIDIA CUDA Redistributable, необходимые для GPU-ускорения Whisper на видеокартах NVIDIA.
-
-На них распространяется **NVIDIA CUDA Toolkit End User License Agreement**, включая приложение
-«Distribution of the CUDA Redistributables»: https://docs.nvidia.com/cuda/eula/
-
-Приложение работает и без них — при отсутствии совместимой видеокарты Whisper использует Vulkan
-или CPU.
 
 ---
 
@@ -98,8 +76,6 @@ MIT-лицензия исходников Egoist Voice не заменяет о�
 - **llama.cpp b10219**, MIT: `licenses/llama.cpp-LICENSE.txt`.
 - **Visual C++ 2022 Redistributable**, условия Microsoft: указатель на официальный список
   распространяемых компонентов — `licenses/Microsoft-Visual-Cpp-2022-REDIST.txt`.
-- CUDA распространяется только как часть приложения; полные условия включены в
-  `licenses/NVIDIA-CUDA-EULA.html`. Драйвер NVIDIA в комплект не входит.
 
 Установщик Full сохраняет словарь, настройки, историю и кэш ASR/Qwen при обновлении и удалении.
 Общий движок перевода учитывает владельцев Voice/Translator; чужой owner не удаляется.

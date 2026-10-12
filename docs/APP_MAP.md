@@ -17,7 +17,7 @@ Bounded text repairs support catalogue-backed Russian-name/preposition joins and
 ## Actors and flows
 
 - Warm WASAPI pre-roll → user presses configured trigger → in-memory session +
-  release tail → one 16 kHz mono conversion → local GigaAM/conditional Whisper
+  release tail → one 16 kHz mono conversion → local GigaAM
   ASR → target/utterance entity profile → deterministic canonicalization →
   normalization → safe clipboard/keystroke delivery.
 - Esc cancels; rejected/quiet/short audio receives explicit state; sensitive password targets suppress copy/insert.
