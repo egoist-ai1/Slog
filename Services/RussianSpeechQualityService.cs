@@ -52,11 +52,24 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
     private async Task WarmUpCoreAsync(IProgress<ModelProgress>? progress, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        await _primary.WarmUpAsync(progress, cancellationToken).ConfigureAwait(false);
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        _primaryReady = true;
-        if (FormatSpeechPunctuation)
-            await EnsureFormattingAsync(progress, cancellationToken).ConfigureAwait(false);
+        // Both models load at once: they use separate native contexts and the formatter's own
+        // failures are absorbed by EnsureFormattingAsync, so the primary result is never delayed
+        // by, or lost to, the formatter.
+        var formatterWarmup = FormatSpeechPunctuation
+            ? EnsureFormattingAsync(progress, cancellationToken)
+            : Task.CompletedTask;
+        try
+        {
+            await _primary.WarmUpAsync(progress, cancellationToken).ConfigureAwait(false);
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _primaryReady = true;
+        }
+        catch
+        {
+            await ObserveAsync(formatterWarmup).ConfigureAwait(false);
+            throw;
+        }
+        await formatterWarmup.ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_disposed, this);
     }

@@ -27,6 +27,7 @@ public partial class App : System.Windows.Application
     private bool _shutdownRequested;
     private IDisposable? _startupFailureTray;
     private IModelManager? _startupModelManager;
+    private ITranscriptionService? _startupTranscription;
     private RecentRecordingHistoryService? _startupRecentRecordings;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -280,6 +281,13 @@ public partial class App : System.Windows.Application
             new TextInsertionService());
         var settingsService = new DictationSettingsService();
         var settings = settingsService.Load();
+        // The models load while the capture, window, tray and hotkey are still being created.
+        // The window's own BeginWarmUp later joins this warm-up (idempotent) for status and errors.
+        var transcription = VoiceRuntimeProfile.CreateTranscription(modelManager);
+        _startupTranscription = transcription;
+        if (transcription is RussianSpeechQualityService qualityService)
+            qualityService.FormatSpeechPunctuation = settings.FormatSpeechPunctuation;
+        if (!isolatedVisualPreview) StartEarlyWarmUp(transcription);
         _themeService = new AppThemeService();
         _themeService.Apply(settings.Theme);
         var recentRecordings = new RecentRecordingHistoryService();
@@ -299,6 +307,9 @@ public partial class App : System.Windows.Application
         {
             // Не закрываемся: аудио-служба может подняться позже. Иконка в трее остаётся с пунктом «Выход».
             AppLog.Write("Microphone startup construction failed after retries", exception);
+            // Без микрофона модели в памяти не нужны: освобождаем их до выхода.
+            _startupTranscription = null;
+            _ = Task.Run(() => DisposeStartupOwned(transcription));
             startupTray.ShowFailed(RequestShutdown);
             _startupFailureTray = startupTray.Detach();
             return;
@@ -306,7 +317,7 @@ public partial class App : System.Windows.Application
         if (_shutdownRequested) return;
         var window = new MainWindow(
             capture,
-            VoiceRuntimeProfile.CreateTranscription(modelManager),
+            transcription,
             delivery,
             modelManager,
             settingsService,
@@ -315,6 +326,7 @@ public partial class App : System.Windows.Application
 
         MainWindow = window;
         _startupModelManager = null;
+        _startupTranscription = null;
         _startupRecentRecordings = null;
         if (e.Args.Length >= 2 && e.Args[0].Equals("--render-settings-preview", StringComparison.OrdinalIgnoreCase))
         {
@@ -488,6 +500,17 @@ public partial class App : System.Windows.Application
         AppLog.Write($"Startup complete, background={background}");
     }
 
+    private static void StartEarlyWarmUp(ITranscriptionService transcription) =>
+        _ = Task.Run(async () =>
+        {
+            try { await transcription.WarmUpAsync(null, CancellationToken.None).ConfigureAwait(false); }
+            catch (Exception exception)
+            {
+                // The window's BeginWarmUp repeats the warm-up and reports the failure to the user.
+                AppLog.Write("Early model warm-up did not finish", exception);
+            }
+        });
+
     internal static Task<IAudioCaptureService> CreateCaptureForStartupAsync(Func<IAudioCaptureService> factory) =>
         Task.Run(factory);
 
@@ -525,6 +548,7 @@ public partial class App : System.Windows.Application
                 await Task.Run(() =>
                 {
                     DisposeStartupOwned(_startupRecentRecordings);
+                    DisposeStartupOwned(_startupTranscription);
                     DisposeStartupOwned(_startupModelManager);
                 });
             }

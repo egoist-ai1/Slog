@@ -124,6 +124,41 @@ public sealed class RussianSpeechQualityTests
     }
 
     [Fact]
+    public async Task Warmup_loads_both_models_concurrently()
+    {
+        var primaryIn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var formatterIn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var primary = new FakeEngine("a") { BeforeWarmup = async _ => { primaryIn.SetResult(); await formatterIn.Task; } };
+        var formatter = new FakeEngine("b") { BeforeWarmup = async _ => { formatterIn.SetResult(); await primaryIn.Task; } };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        await service.WarmUpAsync(null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(service.PrimaryAvailable);
+        Assert.True(service.FormattingAvailable);
+    }
+
+    [Fact]
+    public async Task Failed_primary_warmup_does_not_leave_the_formatter_task_unobserved()
+    {
+        var primary = new FakeEngine("a") { WarmupFailure = new InvalidOperationException("primary") };
+        var formatter = new FakeEngine("b") { WarmupFailure = new InvalidOperationException("formatter") };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.WarmUpAsync(null, CancellationToken.None));
+        Assert.False(service.PrimaryAvailable);
+        Assert.False(service.FormattingAvailable);
+    }
+
+    [Fact]
+    public async Task Repeated_warmup_after_early_warmup_does_not_reload_ready_state()
+    {
+        var primary = new FakeEngine("a"); var formatter = new FakeEngine("b");
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        await service.WarmUpAsync(null, CancellationToken.None);
+        await service.WarmUpAsync(null, CancellationToken.None);
+        Assert.Equal(1, formatter.WarmupCalls);
+        Assert.True(service.PrimaryAvailable && service.FormattingAvailable);
+    }
+
+    [Fact]
     public async Task Disabled_formatting_does_not_load_or_decode_the_second_model()
     {
         var primary = new FakeEngine("весь исходный текст");
