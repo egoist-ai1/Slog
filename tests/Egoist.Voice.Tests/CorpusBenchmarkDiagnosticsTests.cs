@@ -107,7 +107,7 @@ public sealed class CorpusBenchmarkDiagnosticsTests
     }
 
     [Fact]
-    public void Stage_attribution_distinguishes_gate_selection_and_normalization()
+    public void Stage_attribution_distinguishes_gate_and_normalization()
     {
         var accepted = new SpeechActivitySnapshot(
             true,
@@ -121,27 +121,17 @@ public sealed class CorpusBenchmarkDiagnosticsTests
             "ну и уйди",
             samples,
             rejected,
-            Observation("ну и уйди", null, "ну и уйди", "GigaAM"),
+            Observation("ну и уйди"),
             "ну и уйди",
             TimeSpan.FromMilliseconds(2),
             TimeSpan.FromMilliseconds(1));
         Assert.Equal("SpeechGate", gate.AttributionCode);
 
-        var selection = CorpusBenchmark.AnalyzeStages(
-            "ну и уйди",
-            samples,
-            accepted,
-            Observation("ну и уйди", "уйди", "уйди", "Whisper"),
-            "уйди",
-            TimeSpan.FromMilliseconds(2),
-            TimeSpan.FromMilliseconds(1));
-        Assert.Equal("CandidateSelection", selection.AttributionCode);
-
         var normalization = CorpusBenchmark.AnalyzeStages(
             "ну и уйди",
             samples,
             accepted,
-            Observation("ну и уйди", null, "ну и уйди", "GigaAM"),
+            Observation("ну и уйди"),
             "уйди",
             TimeSpan.FromMilliseconds(2),
             TimeSpan.FromMilliseconds(1));
@@ -163,9 +153,9 @@ public sealed class CorpusBenchmarkDiagnosticsTests
     }
 
     [Fact]
-    public void Diagnostic_summary_contains_buckets_stage_percentiles_and_fallback_counts()
+    public void Diagnostic_summary_contains_buckets_stage_percentiles_and_no_engine_selection_fields()
     {
-        var timings = new BenchmarkEntryStageTimings(2, 100, 80, 1, 3, 184);
+        var timings = new BenchmarkEntryStageTimings(2, 100, 3, 184);
         var report = CorpusBenchmark.Summarize(
             "diagnostic-fixture",
             [
@@ -176,11 +166,7 @@ public sealed class CorpusBenchmarkDiagnosticsTests
                     CaptureCode: "CaptureVeryQuiet",
                     GateCode: "GateAccepted",
                     AttributionCode: "NoFailure",
-                    FallbackTrigger: "RussifiedTerm",
-                    FallbackRan: true,
-                    SelectedEngine: "GigaAM",
                     PrimaryWordErrors: 0,
-                    FallbackWordErrors: 1,
                     SelectedWordErrors: 0,
                     StageTimings: timings)
             ],
@@ -193,8 +179,6 @@ public sealed class CorpusBenchmarkDiagnosticsTests
                 UiThreadStalls: new BenchmarkUiStallSummary(3, 1, 4, 4, 0)));
 
         var diagnostics = Assert.IsType<BenchmarkDiagnosticsSummary>(report.Diagnostics);
-        Assert.Equal(1, diagnostics.FallbackRequestedClips);
-        Assert.Equal(1, diagnostics.FallbackRanClips);
         Assert.Contains(diagnostics.StageTimings, stage => stage.Stage == "primary-decode" && stage.P95Ms == 100);
         Assert.Contains(diagnostics.Buckets, bucket => bucket.Bucket == "quiet" && bucket.Clips == 1);
         Assert.Equal(0, diagnostics.UiThreadStalls!.Over100Ms);
@@ -217,22 +201,10 @@ public sealed class CorpusBenchmarkDiagnosticsTests
         Assert.Equal(1, summary.Over100Ms);
     }
 
-    private static HybridTranscriptionObservation Observation(
-        string primary,
-        string? fallback,
-        string selected,
-        string engine) => new(
-            new TranscriptionResult(selected, TimeSpan.FromMilliseconds(100)),
-            new TranscriptionResult(primary, TimeSpan.FromMilliseconds(100)),
-            fallback is null ? null : new TranscriptionResult(fallback, TimeSpan.FromMilliseconds(80)),
-            fallback is null ? MixedSpeechTrigger.None : MixedSpeechTrigger.RussifiedTerm,
-            engine,
-            PrimaryFailed: false,
-            FallbackFailed: false,
-            FallbackRan: fallback is not null,
-            FallbackUnavailable: false,
-            TimeSpan.FromMilliseconds(1),
-            TimeSpan.FromMilliseconds(180));
+    private static BenchmarkObservation Observation(string text) => new(
+        new TranscriptionResult(text, TimeSpan.FromMilliseconds(100)),
+        TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(180));
 
     private static string TemporaryDirectory()
     {

@@ -29,7 +29,7 @@ public sealed class CorpusBenchmarkPrivacyTests
             Assert.DoesNotContain(hypothesisCanary, json, StringComparison.Ordinal);
             Assert.DoesNotContain("C:\\Users", json, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("aggregate-only-no-transcript", json, StringComparison.Ordinal);
-            Assert.Contains("egoist.voice.corpus-benchmark/v3", json, StringComparison.Ordinal);
+            Assert.Contains("egoist.voice.corpus-benchmark/v4", json, StringComparison.Ordinal);
             Assert.Contains("wordErrors", json, StringComparison.Ordinal);
         }
         finally
@@ -87,20 +87,10 @@ public sealed class CorpusBenchmarkPrivacyTests
     public void Raw_engine_candidates_are_reduced_to_counts_before_report_serialization()
     {
         const string referenceCanary = "REFERENCE-RAW-CANARY";
-        const string primaryCanary = "PRIMARY-RAW-CANARY";
-        const string fallbackCanary = "FALLBACK-RAW-CANARY";
         const string selectedCanary = "SELECTED-RAW-CANARY";
-        var observation = new HybridTranscriptionObservation(
+        var observation = new BenchmarkObservation(
             new TranscriptionResult(selectedCanary, TimeSpan.FromMilliseconds(20)),
-            new TranscriptionResult(primaryCanary, TimeSpan.FromMilliseconds(10)),
-            new TranscriptionResult(fallbackCanary, TimeSpan.FromMilliseconds(20)),
-            MixedSpeechTrigger.Requested,
-            "Whisper",
-            PrimaryFailed: false,
-            FallbackFailed: false,
-            FallbackRan: true,
-            FallbackUnavailable: false,
-            TimeSpan.FromMilliseconds(1),
+            TimeSpan.FromMilliseconds(20),
             TimeSpan.FromMilliseconds(31));
         var diagnostics = CorpusBenchmark.AnalyzeStages(
             referenceCanary,
@@ -118,12 +108,7 @@ public sealed class CorpusBenchmarkPrivacyTests
                     CaptureCode: diagnostics.CaptureCode,
                     GateCode: diagnostics.GateCode,
                     AttributionCode: diagnostics.AttributionCode,
-                    FallbackTrigger: diagnostics.FallbackTrigger,
-                    FallbackRan: diagnostics.FallbackRan,
-                    FallbackUnavailable: diagnostics.FallbackUnavailable,
-                    SelectedEngine: diagnostics.SelectedEngine,
                     PrimaryWordErrors: diagnostics.PrimaryWordErrors,
-                    FallbackWordErrors: diagnostics.FallbackWordErrors,
                     SelectedWordErrors: diagnostics.SelectedWordErrors,
                     StageTimings: diagnostics.StageTimings)
             ]);
@@ -135,11 +120,10 @@ public sealed class CorpusBenchmarkPrivacyTests
             var json = File.ReadAllText(path);
 
             Assert.DoesNotContain(referenceCanary, json, StringComparison.Ordinal);
-            Assert.DoesNotContain(primaryCanary, json, StringComparison.Ordinal);
-            Assert.DoesNotContain(fallbackCanary, json, StringComparison.Ordinal);
             Assert.DoesNotContain(selectedCanary, json, StringComparison.Ordinal);
             Assert.Contains("primaryWordErrors", json, StringComparison.Ordinal);
-            Assert.Contains("fallbackWordErrors", json, StringComparison.Ordinal);
+            Assert.DoesNotContain("fallback", json, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("whisper", json, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -236,11 +220,11 @@ public sealed class CorpusBenchmarkPrivacyTests
     }
 
     [Fact]
-    public void Captured_parameters_pin_the_current_offline_hybrid_pipeline()
+    public void Captured_parameters_pin_the_current_offline_pipeline()
     {
         var parameters = CorpusBenchmark.CaptureParameters();
 
-        Assert.Equal("HybridTranscriptionService", parameters.Pipeline);
+        Assert.Equal("RussianSpeechQualityService", parameters.Pipeline);
         Assert.Equal(16_000, parameters.InputSampleRateHz);
         Assert.Equal(500, parameters.CapturePreRollMs);
         Assert.Equal(250, parameters.CaptureReleaseTailMs);
@@ -248,12 +232,6 @@ public sealed class CorpusBenchmarkPrivacyTests
         Assert.False(parameters.GigaAmContextualBias);
         Assert.Null(parameters.GigaAmHotwordVersion);
         Assert.Null(parameters.GigaAmHotwordScore);
-        Assert.True(parameters.WhisperThreads > 0);
-        Assert.Equal("auto", parameters.WhisperRuntimePreference);
-        Assert.Equal("not-loaded", parameters.WhisperRuntimeLoaded);
-        Assert.True(parameters.WhisperLanguageDetection);
-        Assert.True(parameters.WhisperNoContext);
-        Assert.False(parameters.MixedLanguageMode);
         Assert.Equal(BuiltInVocabulary.Version, parameters.EntityCatalogVersion);
         Assert.Equal("target-and-utterance/v1", parameters.EntityProfilePolicy);
         Assert.False(parameters.ModelDownloadAllowed);

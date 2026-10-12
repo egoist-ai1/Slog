@@ -6,8 +6,6 @@ param(
   [string]$Label = "voice-2.1.1-dirty-baseline",
   [ValidateSet("baseline", "hotwords")]
   [string]$DecoderMode = "baseline",
-  [ValidateSet("auto", "vulkan", "cpu")]
-  [string]$WhisperRuntime = "auto",
   [ValidateSet("full", "quality-challenge")]
   [string]$Profile = "full",
   [string]$ProfilePath,
@@ -105,11 +103,7 @@ $BenchmarkArguments = @(
 )
 if ($BenchmarkProfilePath) {
   $BenchmarkArguments += "`"$BenchmarkProfilePath`""
-} else {
-  # Preserve the positional profile slot when a runtime is supplied for a full-corpus run.
-  $BenchmarkArguments += "-"
 }
-$BenchmarkArguments += $WhisperRuntime
 $BenchmarkProcess = Start-Process `
   -FilePath $Executable `
   -ArgumentList $BenchmarkArguments `

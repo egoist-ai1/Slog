@@ -1,0 +1,860 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://egoist.local/schemas/voice/benchmark-report-v4.schema.json",
+  "title": "Egoist Voice RussianSpeechQualityService aggregate-only corpus benchmark report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "generatedUtc",
+    "label",
+    "wer",
+    "cer",
+    "p50Ms",
+    "p95Ms",
+    "sets",
+    "entries",
+    "schema",
+    "privacy",
+    "failedClips",
+    "entityAccuracy",
+    "entitiesExpected",
+    "splitErrors",
+    "commandPrecision",
+    "commandRecall",
+    "punctuationF1",
+    "boundaryAccuracy",
+    "corpus",
+    "environment",
+    "parameters",
+    "resources",
+    "diagnostics"
+  ],
+  "properties": {
+    "generatedUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "label": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$"
+    },
+    "wer": {
+      "type": "number",
+      "minimum": 0
+    },
+    "cer": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p50Ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "p95Ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "schema": {
+      "const": "egoist.voice.corpus-benchmark/v4"
+    },
+    "privacy": {
+      "const": "aggregate-only-no-transcript"
+    },
+    "failedClips": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "entityAccuracy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "entitiesExpected": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "splitErrors": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "commandPrecision": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "commandRecall": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "punctuationF1": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "boundaryAccuracy": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "sets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "set",
+          "clips",
+          "wer",
+          "cer",
+          "failedClips",
+          "entityAccuracy",
+          "entitiesExpected",
+          "splitErrors",
+          "commandPrecision",
+          "commandRecall",
+          "punctuationF1",
+          "boundaryAccuracy"
+        ],
+        "properties": {
+          "set": {
+            "type": "string"
+          },
+          "clips": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "wer": {
+            "type": "number",
+            "minimum": 0
+          },
+          "cer": {
+            "type": "number",
+            "minimum": 0
+          },
+          "failedClips": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entityAccuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "entitiesExpected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "splitErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "commandPrecision": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "commandRecall": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "punctuationF1": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "boundaryAccuracy": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "set",
+          "perceivedMs",
+          "totalMs",
+          "wordErrors",
+          "referenceWords",
+          "characterErrors",
+          "referenceCharacters",
+          "entitiesExpected",
+          "entitiesCorrect",
+          "splitErrors",
+          "boundaryExpected",
+          "boundaryCorrect",
+          "buckets",
+          "captureCode",
+          "gateCode",
+          "attributionCode"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*/[0-9]{3}$"
+          },
+          "set": {
+            "type": "string"
+          },
+          "perceivedMs": {
+            "type": "number",
+            "minimum": 0
+          },
+          "totalMs": {
+            "type": "number",
+            "minimum": 0
+          },
+          "errorCode": {
+            "type": "string"
+          },
+          "wordErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "referenceWords": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "characterErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "referenceCharacters": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entitiesExpected": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "entitiesCorrect": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "splitErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "commandExpected": {
+            "type": "boolean"
+          },
+          "commandDetected": {
+            "type": "boolean"
+          },
+          "punctuationMatches": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "referencePunctuation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hypothesisPunctuation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "boundaryExpected": {
+            "type": "boolean"
+          },
+          "boundaryCorrect": {
+            "type": "boolean"
+          },
+          "buckets": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
+          },
+          "captureCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          },
+          "gateCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          },
+          "attributionCode": {
+            "type": "string",
+            "pattern": "^[A-Za-z]+$"
+          },
+          "primaryWordErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "selectedWordErrors": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stageMs": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "captureAnalysis",
+              "normalization",
+              "pipeline"
+            ],
+            "properties": {
+              "captureAnalysis": {
+                "type": "number",
+                "minimum": 0
+              },
+              "primaryDecode": {
+                "type": "number",
+                "minimum": 0
+              },
+              "normalization": {
+                "type": "number",
+                "minimum": 0
+              },
+              "pipeline": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "reference"
+              ]
+            },
+            {
+              "required": [
+                "hypothesis"
+              ]
+            },
+            {
+              "required": [
+                "transcript"
+              ]
+            },
+            {
+              "required": [
+                "primaryText"
+              ]
+            },
+            {
+              "required": [
+                "fallbackText"
+              ]
+            },
+            {
+              "required": [
+                "selectedText"
+              ]
+            },
+            {
+              "required": [
+                "audio"
+              ]
+            },
+            {
+              "required": [
+                "audioPath"
+              ]
+            },
+            {
+              "required": [
+                "audioContent"
+              ]
+            },
+            {
+              "required": [
+                "text"
+              ]
+            },
+            {
+              "required": [
+                "path"
+              ]
+            },
+            {
+              "required": [
+                "targetApplication"
+              ]
+            },
+            {
+              "required": [
+                "windowTitle"
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "clips",
+        "audioBytes",
+        "scriptSha256"
+      ],
+      "properties": {
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "clips": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "audioBytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "scriptSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "appVersion",
+        "runtime",
+        "os",
+        "processArchitecture",
+        "logicalProcessors",
+        "models"
+      ],
+      "properties": {
+        "appVersion": {
+          "type": "string"
+        },
+        "appSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runtime": {
+          "type": "string"
+        },
+        "os": {
+          "type": "string"
+        },
+        "processArchitecture": {
+          "type": "string"
+        },
+        "cpu": {
+          "type": "string"
+        },
+        "logicalProcessors": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "bytes",
+              "sha256"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pipeline",
+        "inputSampleRateHz",
+        "gigaAmThreads",
+        "gigaAmBatchThreshold",
+        "gigaAmMaxBatchSize",
+        "gigaAmContextualBias",
+        "entityCatalogVersion",
+        "entityProfilePolicy",
+        "applyBuiltInDictionary",
+        "applyVoiceCommands",
+        "applyNumberNormalization",
+        "modelDownloadAllowed"
+      ],
+      "properties": {
+        "pipeline": {
+          "const": "RussianSpeechQualityService"
+        },
+        "inputSampleRateHz": {
+          "const": 16000
+        },
+        "capturePreRollMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "captureReleaseTailMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "gigaAmThreads": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gigaAmBatchThreshold": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gigaAmMaxBatchSize": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "gigaAmContextualBias": {
+          "type": "boolean"
+        },
+        "gigaAmHotwordVersion": {
+          "type": "string"
+        },
+        "gigaAmHotwordScore": {
+          "type": "number"
+        },
+        "entityCatalogVersion": {
+          "type": "string"
+        },
+        "entityProfilePolicy": {
+          "type": "string"
+        },
+        "applyBuiltInDictionary": {
+          "type": "boolean"
+        },
+        "applyVoiceCommands": {
+          "type": "boolean"
+        },
+        "applyNumberNormalization": {
+          "type": "boolean"
+        },
+        "modelDownloadAllowed": {
+          "const": false
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workingSetStartBytes",
+        "workingSetEndBytes",
+        "peakWorkingSetBytes",
+        "privateStartBytes",
+        "privateEndBytes",
+        "handlesStart",
+        "handlesEnd",
+        "managedStartBytes",
+        "managedEndBytes"
+      ],
+      "properties": {
+        "workingSetStartBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "workingSetEndBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "peakWorkingSetBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "privateStartBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "privateEndBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "handlesStart": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "handlesEnd": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "managedStartBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "managedEndBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "sha256",
+        "clips",
+        "buckets"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "clips": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "buckets": {
+          "type": "object",
+          "propertyNames": {
+            "allOf": [
+              {
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              {
+                "not": {
+                  "enum": [
+                    "transcript",
+                    "audiopath",
+                    "audiocontent",
+                    "targetapplication"
+                  ]
+                }
+              }
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captureCodes",
+        "gateCodes",
+        "attributions",
+        "stageTimings",
+        "buckets",
+        "uiThreadStalls"
+      ],
+      "properties": {
+        "captureCodes": {
+          "$ref": "#/$defs/codeCounts"
+        },
+        "gateCodes": {
+          "$ref": "#/$defs/codeCounts"
+        },
+        "attributions": {
+          "$ref": "#/$defs/codeCounts"
+        },
+        "stageTimings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "stage",
+              "samples",
+              "p50Ms",
+              "p95Ms"
+            ],
+            "properties": {
+              "stage": {
+                "type": "string"
+              },
+              "samples": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "p50Ms": {
+                "type": "number",
+                "minimum": 0
+              },
+              "p95Ms": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "buckets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bucket",
+              "clips",
+              "failedClips",
+              "wer",
+              "gateAcceptedClips"
+            ],
+            "properties": {
+              "bucket": {
+                "type": "string"
+              },
+              "clips": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failedClips": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "wer": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gateAcceptedClips": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "uiThreadStalls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "samples",
+            "p50Ms",
+            "p95Ms",
+            "maxMs",
+            "over100Ms"
+          ],
+          "properties": {
+            "samples": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "p50Ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "p95Ms": {
+              "type": "number",
+              "minimum": 0
+            },
+            "maxMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "over100Ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "codeCounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "clips"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "clips": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  },
+  "not": {
+    "anyOf": [
+      {
+        "required": [
+          "reference"
+        ]
+      },
+      {
+        "required": [
+          "hypothesis"
+        ]
+      },
+      {
+        "required": [
+          "transcript"
+        ]
+      },
+      {
+        "required": [
+          "audio"
+        ]
+      },
+      {
+        "required": [
+          "audioPath"
+        ]
+      },
+      {
+        "required": [
+          "audioContent"
+        ]
+      },
+      {
+        "required": [
+          "text"
+        ]
+      },
+      {
+        "required": [
+          "path"
+        ]
+      },
+      {
+        "required": [
+          "targetApplication"
+        ]
+      },
+      {
+        "required": [
+          "windowTitle"
+        ]
+      }
+    ]
+  }
+}

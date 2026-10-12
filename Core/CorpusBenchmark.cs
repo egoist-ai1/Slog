@@ -80,20 +80,13 @@ public sealed record BenchmarkEntry(
     [property: JsonPropertyName("captureCode")] string CaptureCode = "CaptureNotMeasured",
     [property: JsonPropertyName("gateCode")] string GateCode = "GateNotMeasured",
     [property: JsonPropertyName("attributionCode")] string AttributionCode = "NotAttributed",
-    [property: JsonPropertyName("fallbackTrigger")] string FallbackTrigger = "None",
-    [property: JsonPropertyName("fallbackRan")] bool FallbackRan = false,
-    [property: JsonPropertyName("fallbackUnavailable")] bool FallbackUnavailable = false,
-    [property: JsonPropertyName("selectedEngine")] string? SelectedEngine = null,
     [property: JsonPropertyName("primaryWordErrors")] int? PrimaryWordErrors = null,
-    [property: JsonPropertyName("fallbackWordErrors")] int? FallbackWordErrors = null,
     [property: JsonPropertyName("selectedWordErrors")] int? SelectedWordErrors = null,
     [property: JsonPropertyName("stageMs")] BenchmarkEntryStageTimings? StageTimings = null);
 
 public sealed record BenchmarkEntryStageTimings(
     [property: JsonPropertyName("captureAnalysis")] double CaptureAnalysisMs,
     [property: JsonPropertyName("primaryDecode")] double? PrimaryDecodeMs,
-    [property: JsonPropertyName("fallbackDecode")] double? FallbackDecodeMs,
-    [property: JsonPropertyName("selection")] double SelectionMs,
     [property: JsonPropertyName("normalization")] double NormalizationMs,
     [property: JsonPropertyName("pipeline")] double PipelineMs);
 
@@ -137,13 +130,6 @@ public sealed record BenchmarkParameters(
     [property: JsonPropertyName("gigaAmContextualBias")] bool GigaAmContextualBias,
     [property: JsonPropertyName("gigaAmHotwordVersion")] string? GigaAmHotwordVersion,
     [property: JsonPropertyName("gigaAmHotwordScore")] float? GigaAmHotwordScore,
-    [property: JsonPropertyName("whisperThreads")] int WhisperThreads,
-    [property: JsonPropertyName("whisperRuntimePreference")] string WhisperRuntimePreference,
-    [property: JsonPropertyName("whisperRuntimeLoaded")] string WhisperRuntimeLoaded,
-    [property: JsonPropertyName("whisperLanguageDetection")] bool WhisperLanguageDetection,
-    [property: JsonPropertyName("whisperSampling")] string WhisperSampling,
-    [property: JsonPropertyName("whisperNoContext")] bool WhisperNoContext,
-    [property: JsonPropertyName("mixedLanguageMode")] bool MixedLanguageMode,
     [property: JsonPropertyName("entityCatalogVersion")] string EntityCatalogVersion,
     [property: JsonPropertyName("entityProfilePolicy")] string EntityProfilePolicy,
     [property: JsonPropertyName("applyBuiltInDictionary")] bool ApplyBuiltInDictionary,
@@ -216,8 +202,7 @@ public sealed record BenchmarkBucketSummary(
     [property: JsonPropertyName("clips")] int Clips,
     [property: JsonPropertyName("failedClips")] int FailedClips,
     [property: JsonPropertyName("wer")] double WordErrorRate,
-    [property: JsonPropertyName("gateAcceptedClips")] int GateAcceptedClips,
-    [property: JsonPropertyName("fallbackRequestedClips")] int FallbackRequestedClips);
+    [property: JsonPropertyName("gateAcceptedClips")] int GateAcceptedClips);
 
 public sealed record BenchmarkDiagnosticsSummary(
     [property: JsonPropertyName("captureCodes")] IReadOnlyList<BenchmarkCodeCount> CaptureCodes,
@@ -225,23 +210,22 @@ public sealed record BenchmarkDiagnosticsSummary(
     [property: JsonPropertyName("attributions")] IReadOnlyList<BenchmarkCodeCount> Attributions,
     [property: JsonPropertyName("stageTimings")] IReadOnlyList<BenchmarkStageTimingSummary> StageTimings,
     [property: JsonPropertyName("buckets")] IReadOnlyList<BenchmarkBucketSummary> Buckets,
-    [property: JsonPropertyName("fallbackRequestedClips")] int FallbackRequestedClips,
-    [property: JsonPropertyName("fallbackRanClips")] int FallbackRanClips,
-    [property: JsonPropertyName("fallbackUnavailableClips")] int FallbackUnavailableClips,
-    [property: JsonPropertyName("fallbackRequestRate")] double FallbackRequestRate,
-    [property: JsonPropertyName("fallbackRunRate")] double FallbackRunRate,
     [property: JsonPropertyName("uiThreadStalls")] BenchmarkUiStallSummary? UiThreadStalls);
+
+/// <summary>
+/// Что раннер бенчмарка наблюдает за одним вызовом TranscribeAsync. Текст остаётся только в
+/// памяти: в отчёт попадают одни числа.
+/// </summary>
+internal sealed record BenchmarkObservation(
+    TranscriptionResult Result,
+    TimeSpan PrimaryElapsed,
+    TimeSpan PipelineElapsed);
 
 internal sealed record BenchmarkClipDiagnostics(
     string CaptureCode,
     string GateCode,
     string AttributionCode,
-    string FallbackTrigger,
-    bool FallbackRan,
-    bool FallbackUnavailable,
-    string SelectedEngine,
     int? PrimaryWordErrors,
-    int? FallbackWordErrors,
     int SelectedWordErrors,
     BenchmarkEntryStageTimings StageTimings);
 
@@ -263,7 +247,7 @@ public sealed record BenchmarkReport(
     [property: JsonPropertyName("p95Ms")] double P95Ms,
     [property: JsonPropertyName("sets")] IReadOnlyList<BenchmarkSetSummary> Sets,
     [property: JsonPropertyName("entries")] IReadOnlyList<BenchmarkEntry> Entries,
-    [property: JsonPropertyName("schema")] string Schema = "egoist.voice.corpus-benchmark/v3",
+    [property: JsonPropertyName("schema")] string Schema = CorpusBenchmark.CurrentSchema,
     [property: JsonPropertyName("privacy")] string Privacy = "aggregate-only-no-transcript",
     [property: JsonPropertyName("failedClips")] int FailedClips = 0,
     [property: JsonPropertyName("entityAccuracy")] double EntityAccuracy = 1,
@@ -302,11 +286,25 @@ public static class CorpusBenchmark
 {
     public const string ReferenceFileName = "reference.jsonl";
 
+    /// <summary>Идентификатор конвейера в отчёте: baseline другого конвейера сравнивать нельзя.</summary>
+    public const string PipelineName = nameof(RussianSpeechQualityService);
+
+    public const string CurrentSchema = "egoist.voice.corpus-benchmark/v4";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
+    // Отчёты v2/v3 содержат снятые поля whisper*/fallback*: при чтении их пропускаем. Остальные
+    // входы (script, reference, profile) остаются строгими.
+    private static readonly JsonSerializerOptions ReportReadJson = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
@@ -492,15 +490,12 @@ public static class CorpusBenchmark
                 .ToArray());
     }
 
-    public static BenchmarkParameters CaptureParameters(
-        bool enableContextualBias = false,
-        string whisperRuntimePreference = "auto",
-        string whisperRuntimeLoaded = "not-loaded")
+    public static BenchmarkParameters CaptureParameters(bool enableContextualBias = false)
     {
         enableContextualBias &= RussianAsrProfile.ContextualBiasSupported;
         var postProcessing = PostProcessingOptions.Default;
         return new BenchmarkParameters(
-            nameof(HybridTranscriptionService),
+            PipelineName,
             GigaAmTranscriptionService.BenchmarkSampleRate,
             AudioCaptureService.PreRollDuration.TotalMilliseconds,
             AudioCaptureService.ReleaseTailMinimum.TotalMilliseconds,
@@ -510,13 +505,6 @@ public static class CorpusBenchmark
             GigaAmContextualBias: enableContextualBias,
             GigaAmHotwordVersion: enableContextualBias ? GigaAmHotwordResources.Version : null,
             GigaAmHotwordScore: enableContextualBias ? GigaAmHotwordResources.GlobalScore : null,
-            WhisperTranscriptionService.BenchmarkDecodeThreads,
-            WhisperRuntimePreference: whisperRuntimePreference,
-            WhisperRuntimeLoaded: whisperRuntimeLoaded,
-            WhisperLanguageDetection: true,
-            WhisperSampling: "beam-search/default-size",
-            WhisperNoContext: true,
-            MixedLanguageMode: false,
             EntityCatalogVersion: BuiltInVocabulary.Version,
             EntityProfilePolicy: "target-and-utterance/v1",
             ApplyBuiltInDictionary: postProcessing.ApplyDictionary,
@@ -582,46 +570,26 @@ public static class CorpusBenchmark
         string reference,
         float[] samples,
         SpeechActivitySnapshot activity,
-        HybridTranscriptionObservation observation,
+        BenchmarkObservation observation,
         string normalizedText,
         TimeSpan captureAnalysisElapsed,
         TimeSpan normalizationElapsed)
     {
-        int? primaryErrors = observation.Primary is null
-            ? null
-            : RecognitionScorer.Score(reference, observation.Primary.Text).WordErrors;
-        int? fallbackErrors = observation.Fallback is null
-            ? null
-            : RecognitionScorer.Score(reference, observation.Fallback.Text).WordErrors;
         var selectedErrors = RecognitionScorer.Score(reference, observation.Result.Text).WordErrors;
         var finalErrors = RecognitionScorer.Score(reference, normalizedText).WordErrors;
         var captureCode = ClassifyCapture(samples, activity);
         var gateCode = ClassifyGate(activity);
-        var attribution = AttributionCode(
-            captureCode,
-            gateCode,
-            finalErrors,
-            primaryErrors,
-            fallbackErrors,
-            selectedErrors,
-            observation);
+        var attribution = AttributionCode(captureCode, gateCode, finalErrors, selectedErrors);
 
         return new BenchmarkClipDiagnostics(
             captureCode,
             gateCode,
             attribution,
-            observation.FallbackTrigger.ToString(),
-            observation.FallbackRan,
-            observation.FallbackUnavailable,
-            observation.SelectedEngine,
-            primaryErrors,
-            fallbackErrors,
+            selectedErrors,
             selectedErrors,
             new BenchmarkEntryStageTimings(
                 captureAnalysisElapsed.TotalMilliseconds,
-                observation.Primary?.Elapsed.TotalMilliseconds,
-                observation.Fallback?.Elapsed.TotalMilliseconds,
-                observation.SelectionElapsed.TotalMilliseconds,
+                observation.PrimaryElapsed.TotalMilliseconds,
                 normalizationElapsed.TotalMilliseconds,
                 observation.PipelineElapsed.TotalMilliseconds + normalizationElapsed.TotalMilliseconds));
     }
@@ -635,7 +603,7 @@ public static class CorpusBenchmark
     {
         var safeLabel = SafeLabel.IsMatch(label) ? label : "invalid-label";
         var report = new BenchmarkFailureReport(
-            "egoist.voice.corpus-benchmark/v3",
+            CurrentSchema,
             "failed",
             safeLabel,
             errorCode);
@@ -678,7 +646,7 @@ public static class CorpusBenchmark
     }
 
     public static BenchmarkReport? Load(string path) =>
-        File.Exists(path) ? JsonSerializer.Deserialize<BenchmarkReport>(File.ReadAllText(path), Json) : null;
+        File.Exists(path) ? JsonSerializer.Deserialize<BenchmarkReport>(File.ReadAllText(path), ReportReadJson) : null;
 
     public static IReadOnlyList<string> CompareToBaseline(
         BenchmarkReport baseline,
@@ -687,6 +655,11 @@ public static class CorpusBenchmark
         double maxLatencyIncreaseRatio = 0.15)
     {
         var breaches = new List<string>();
+        if (!string.Equals(baseline.Parameters?.Pipeline, candidate.Parameters?.Pipeline, StringComparison.Ordinal))
+        {
+            breaches.Add("Baseline снят на другом конвейере: сравнение с текущим запрещено.");
+        }
+
         if (baseline.Corpus is null || candidate.Corpus is null)
         {
             breaches.Add("Corpus SHA-256 отсутствует: сравнение незамороженных отчётов запрещено.");
@@ -803,8 +776,6 @@ public static class CorpusBenchmark
         {
             SummarizeStage("capture-analysis", successful, entry => entry.StageTimings?.CaptureAnalysisMs),
             SummarizeStage("primary-decode", successful, entry => entry.StageTimings?.PrimaryDecodeMs),
-            SummarizeStage("fallback-decode", successful, entry => entry.StageTimings?.FallbackDecodeMs),
-            SummarizeStage("selection", successful, entry => entry.StageTimings?.SelectionMs),
             SummarizeStage("normalization", successful, entry => entry.StageTimings?.NormalizationMs),
             SummarizeStage("pipeline", successful, entry => entry.StageTimings?.PipelineMs)
         }.Where(summary => summary.Samples > 0).ToArray();
@@ -823,25 +794,16 @@ public static class CorpusBenchmark
                     bucketEntries.Length,
                     bucketEntries.Count(entry => entry.Error is not null),
                     score.WordErrorRate,
-                    scored.Count(entry => entry.GateCode == "GateAccepted"),
-                    scored.Count(entry => entry.FallbackTrigger != MixedSpeechTrigger.None.ToString()));
+                    scored.Count(entry => entry.GateCode == "GateAccepted"));
             })
             .ToArray();
 
-        var fallbackRequested = successful.Count(entry =>
-            entry.FallbackTrigger != MixedSpeechTrigger.None.ToString());
-        var fallbackRan = successful.Count(entry => entry.FallbackRan);
         return new BenchmarkDiagnosticsSummary(
             CountCodes(entries.Select(entry => entry.CaptureCode)),
             CountCodes(entries.Select(entry => entry.GateCode)),
             CountCodes(entries.Select(entry => entry.AttributionCode)),
             stageTimings,
             buckets,
-            fallbackRequested,
-            fallbackRan,
-            successful.Count(entry => entry.FallbackUnavailable),
-            successful.Length == 0 ? 0 : fallbackRequested / (double)successful.Length,
-            successful.Length == 0 ? 0 : fallbackRan / (double)successful.Length,
             uiThreadStalls);
     }
 
@@ -890,10 +852,7 @@ public static class CorpusBenchmark
         string captureCode,
         string gateCode,
         int finalErrors,
-        int? primaryErrors,
-        int? fallbackErrors,
-        int selectedErrors,
-        HybridTranscriptionObservation observation)
+        int selectedErrors)
     {
         if (captureCode == "CaptureNoAudio")
         {
@@ -911,31 +870,11 @@ public static class CorpusBenchmark
         {
             return "CaptureIntegrity";
         }
-        if (observation.PrimaryFailed || primaryErrors is null)
-        {
-            return "PrimaryDecodeFailed";
-        }
-        if ((primaryErrors == 0 || fallbackErrors == 0) && selectedErrors > 0)
-        {
-            return "CandidateSelection";
-        }
         if (finalErrors > selectedErrors)
         {
             return "Normalization";
         }
-        if (observation.FallbackUnavailable && observation.FallbackTrigger != MixedSpeechTrigger.None)
-        {
-            return "FallbackUnavailable";
-        }
-        if (observation.FallbackFailed && primaryErrors > 0)
-        {
-            return "FallbackDecodeFailed";
-        }
-        if (primaryErrors > 0 && (fallbackErrors is null || fallbackErrors > 0))
-        {
-            return "DecoderOutput";
-        }
-        return "Unresolved";
+        return selectedErrors > 0 ? "DecoderOutput" : "Unresolved";
     }
 
     private static BenchmarkSetSummary SummarizeSet(IGrouping<string, BenchmarkEntry> group)

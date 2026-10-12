@@ -53,6 +53,7 @@ Runtime отклоняет неизвестные поля/kind, дубли, н�
 - `corpus-profile-v1.schema.json`;
 - `benchmark-report-v2.schema.json` — чтение прежних frozen reports;
 - `benchmark-report-v3.schema.json` — stage-attributed reports.
+- `benchmark-report-v4.schema.json` — текущий формат (конвейер RussianSpeechQualityService, без полей whisper/fallback); v2 и v3 остаются историческими.
 
 ## Быстрый problem-focused baseline
 

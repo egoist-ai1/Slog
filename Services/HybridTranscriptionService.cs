@@ -6,8 +6,7 @@ namespace Egoist.Voice.Services;
 
 public sealed class HybridTranscriptionService :
     ITranscriptionService,
-    ISampleTranscriptionService,
-    IBenchmarkTranscriptionService
+    ISampleTranscriptionService
 {
     /// <summary>
     /// Full memory-only dictation path. It preserves the same conditional Whisper policy as the
@@ -226,11 +225,6 @@ public sealed class HybridTranscriptionService :
         string audioPath,
         CancellationToken cancellationToken) =>
         TranscribeObservedAsync(audioPath, progress: null, cancellationToken);
-
-    Task<HybridTranscriptionObservation> IBenchmarkTranscriptionService.TranscribeObservedAsync(
-        string audioPath,
-        CancellationToken cancellationToken) =>
-        TranscribeObservedAsync(audioPath, cancellationToken);
 
     private async Task<HybridTranscriptionObservation> TranscribeObservedAsync(
         string audioPath,

@@ -130,17 +130,6 @@ public interface ITranscriptionService : IDisposable
         CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// Benchmark-only observation of the existing hybrid decision. The raw candidates stay in memory;
-/// callers may score them, but must never serialize their text.
-/// </summary>
-internal interface IBenchmarkTranscriptionService : ITranscriptionService
-{
-    Task<HybridTranscriptionObservation> TranscribeObservedAsync(
-        string audioPath,
-        CancellationToken cancellationToken);
-}
-
 internal interface ITranscriptionEngine : ITranscriptionService
 {
     string EngineName { get; }

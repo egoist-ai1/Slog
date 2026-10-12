@@ -56,7 +56,8 @@ public sealed class ReleaseContractTests
                      "corpus-reference-v2.schema.json",
                      "corpus-profile-v1.schema.json",
                      "benchmark-report-v2.schema.json",
-                     "benchmark-report-v3.schema.json"
+                     "benchmark-report-v3.schema.json",
+                     "benchmark-report-v4.schema.json"
                  })
         {
             using var schema = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "tests", "corpus", name)));
@@ -66,7 +67,7 @@ public sealed class ReleaseContractTests
         }
 
         using (var reportSchema = JsonDocument.Parse(File.ReadAllText(
-                   Path.Combine(root, "tests", "corpus", "benchmark-report-v3.schema.json"))))
+                   Path.Combine(root, "tests", "corpus", "benchmark-report-v4.schema.json"))))
         {
             Assert.False(reportSchema.RootElement.GetProperty("additionalProperties").GetBoolean());
             Assert.False(reportSchema.RootElement
@@ -83,7 +84,7 @@ public sealed class ReleaseContractTests
         }
 
         var schemaPrivacyTest = File.ReadAllText(
-            Path.Combine(root, "tests", "corpus", "Test-BenchmarkReportV3Schema.ps1"));
+            Path.Combine(root, "tests", "corpus", "Test-BenchmarkReportV4Schema.ps1"));
         Assert.Contains("Test-Json", schemaPrivacyTest, StringComparison.Ordinal);
         Assert.Contains("$forbiddenProperties", schemaPrivacyTest, StringComparison.Ordinal);
         Assert.Contains("$objectPaths", schemaPrivacyTest, StringComparison.Ordinal);
@@ -93,7 +94,7 @@ public sealed class ReleaseContractTests
         Assert.Contains("--corpus-record", runner, StringComparison.Ordinal);
         Assert.Contains("--corpus-benchmark", runner, StringComparison.Ordinal);
         Assert.Contains("$DecoderMode", runner, StringComparison.Ordinal);
-        Assert.Contains("$WhisperRuntime", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("Whisper", runner, StringComparison.Ordinal);
         Assert.Contains("$Profile", runner, StringComparison.Ordinal);
         Assert.Contains("$ProfilePath", runner, StringComparison.Ordinal);
         Assert.Contains("quality-challenge-v1.json", runner, StringComparison.Ordinal);

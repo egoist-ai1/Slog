@@ -50,12 +50,6 @@ public partial class App : System.Windows.Application
             RequestShutdown();
             return;
         }
-        if (e.Args.Length == 2 && e.Args[0] == "--export-whisper-models")
-        {
-            File.WriteAllText(e.Args[1], System.Text.Json.JsonSerializer.Serialize(ModelCatalog.CreateWhisperRussianModels()));
-            RequestShutdown();
-            return;
-        }
         if (e.Args.Length == 2 && e.Args[0] == "--export-compact-models")
         {
             File.WriteAllText(e.Args[1], System.Text.Json.JsonSerializer.Serialize(ModelCatalog.CreateCompactModels()));
@@ -136,10 +130,9 @@ public partial class App : System.Windows.Application
             _ = RunCorpusBenchmarkAsync(
                 e.Args[1],
                 e.Args[2],
-                e.Args.Length >= 4 ? e.Args[3] : "hybrid",
+                e.Args.Length >= 4 ? e.Args[3] : "voice-benchmark",
                 e.Args.Length >= 5 ? e.Args[4] : "baseline",
-                e.Args.Length >= 6 && !e.Args[5].Equals("-", StringComparison.Ordinal) ? e.Args[5] : null,
-                e.Args.Length >= 7 ? e.Args[6] : "auto");
+                e.Args.Length >= 6 && !e.Args[5].Equals("-", StringComparison.Ordinal) ? e.Args[5] : null);
             return;
         }
 
@@ -171,13 +164,6 @@ public partial class App : System.Windows.Application
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
             _ = RunGigaBenchmarkAsync(e.Args[1], e.Args[2]);
-            return;
-        }
-
-        if (e.Args.Length >= 3 && e.Args[0].Equals("--whisper-benchmark", StringComparison.OrdinalIgnoreCase))
-        {
-            ShutdownMode = ShutdownMode.OnExplicitShutdown;
-            _ = RunWhisperBenchmarkAsync(e.Args[1], e.Args[2]);
             return;
         }
 
@@ -847,8 +833,7 @@ public partial class App : System.Windows.Application
         string outputPath,
         string label,
         string decoderMode,
-        string? profilePath,
-        string whisperRuntimeMode)
+        string? profilePath)
     {
         try
         {
@@ -861,7 +846,6 @@ public partial class App : System.Windows.Application
             };
             if (enableContextualBias && !RussianAsrProfile.ContextualBiasSupported)
                 throw new NotSupportedException("Use baseline decoder mode for plain GigaAM v3 RNNT.");
-            var whisperRuntimePreference = WhisperRuntimePolicy.ConfigureForBenchmark(whisperRuntimeMode);
             corpusDirectory = Path.GetFullPath(corpusDirectory);
             var script = CorpusScript.Load(corpusDirectory);
             var profile = string.IsNullOrWhiteSpace(profilePath)
@@ -877,7 +861,7 @@ public partial class App : System.Windows.Application
             var references = selectedIds is null
                 ? referenceDocument.Entries
                 : referenceDocument.Entries.Where(entry => selectedIds.Contains(entry.Id)).ToArray();
-            var models = ModelCatalog.CreateRequiredModels();
+            var models = ModelCatalog.CreateRussianQualityModels();
             var environment = CorpusBenchmark.CaptureEnvironment(models);
             var resourcesBefore = BenchmarkResourceSnapshot.Capture();
 
@@ -887,15 +871,10 @@ public partial class App : System.Windows.Application
             using var service = CreateTranscriptionService(
                 allowModelDownload: false,
                 enableContextualBias: enableContextualBias);
-            var observedService = service as IBenchmarkTranscriptionService
-                ?? throw new InvalidOperationException("Hybrid benchmark observation is unavailable.");
             // Warm-up is excluded from the measurements on purpose: the first decode pays for ONNX
             // graph optimization and would dominate every percentile computed after it.
             await service.WarmUpAsync(null, CancellationToken.None);
-            var parameters = CorpusBenchmark.CaptureParameters(
-                enableContextualBias,
-                whisperRuntimePreference,
-                WhisperRuntimePolicy.LoadedLibrary);
+            var parameters = CorpusBenchmark.CaptureParameters(enableContextualBias);
             var postProcessor = new TranscriptPostProcessor(UserDictionary.BuiltIn);
             using var uiStalls = new UiThreadStallMonitor(Dispatcher);
 
@@ -961,9 +940,15 @@ public partial class App : System.Windows.Application
                     }
 
                     failureAttribution = "DecodeFailed";
-                    var observation = await observedService.TranscribeObservedAsync(
+                    var pipelineStarted = Stopwatch.GetTimestamp();
+                    var decoded = await service.TranscribeAsync(
                         audioPath,
+                        null,
                         CancellationToken.None);
+                    var observation = new BenchmarkObservation(
+                        decoded,
+                        decoded.Elapsed,
+                        Stopwatch.GetElapsedTime(pipelineStarted));
 
                     // Benchmark the string users actually receive, including the same built-in
                     // dictionary and deterministic command/format stages as normal dictation.
@@ -999,12 +984,7 @@ public partial class App : System.Windows.Application
                         CaptureCode: diagnostics.CaptureCode,
                         GateCode: diagnostics.GateCode,
                         AttributionCode: diagnostics.AttributionCode,
-                        FallbackTrigger: diagnostics.FallbackTrigger,
-                        FallbackRan: diagnostics.FallbackRan,
-                        FallbackUnavailable: diagnostics.FallbackUnavailable,
-                        SelectedEngine: diagnostics.SelectedEngine,
                         PrimaryWordErrors: diagnostics.PrimaryWordErrors,
-                        FallbackWordErrors: diagnostics.FallbackWordErrors,
                         SelectedWordErrors: diagnostics.SelectedWordErrors,
                         StageTimings: diagnostics.StageTimings));
                 }
@@ -1037,10 +1017,6 @@ public partial class App : System.Windows.Application
 
             var uiStallSummary = uiStalls.StopAndSummarize();
             var resourcesAfter = BenchmarkResourceSnapshot.Capture();
-            parameters = parameters with
-            {
-                WhisperRuntimeLoaded = WhisperRuntimePolicy.LoadedLibrary
-            };
             var context = new BenchmarkRunContext(
                 inventory,
                 environment,
@@ -1199,30 +1175,6 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private async Task RunWhisperBenchmarkAsync(string audioPath, string outputPath)
-    {
-        try
-        {
-            using var manager = new ModelManager(ModelCatalog.CreateRequiredModels());
-            using var service = new WhisperTranscriptionService(manager);
-            var cold = await service.TranscribeAsync(audioPath, null, CancellationToken.None);
-            var warm = await service.TranscribeAsync(audioPath, null, CancellationToken.None);
-            await File.WriteAllTextAsync(outputPath,
-                $"cold={cold.Elapsed.TotalSeconds:0.000}s{Environment.NewLine}" +
-                $"warm={warm.Elapsed.TotalSeconds:0.000}s{Environment.NewLine}" +
-                warm.Text);
-        }
-        catch (Exception exception)
-        {
-            Environment.ExitCode = 1;
-            await File.WriteAllTextAsync(outputPath, $"ERROR: {exception}");
-        }
-        finally
-        {
-            RequestShutdown();
-        }
-    }
-
     private async Task RunPipelineSmokeAsync(string audioPath, string outputPath)
     {
         Window? testWindow = null;
@@ -1334,22 +1286,26 @@ public partial class App : System.Windows.Application
         bool allowModelDownload = true,
         bool enableContextualBias = false)
     {
+        // Тот же конвейер, что в поставляемой Compact-сборке: GigaAM v3 + E2E-форматирование.
         var manager = new ModelManager(
-            ModelCatalog.CreateRequiredModels(),
+            ModelCatalog.CreateRussianQualityModels(),
             allowDownload: allowModelDownload);
-        return new OwnedHybridTranscriptionService(manager, enableContextualBias);
+        var primary = new GigaAmTranscriptionService(manager, enableContextualBias, 4);
+        var service = new RussianSpeechQualityService(
+            primary, GigaAmTranscriptionService.CreateFormattingEngine(manager, 4));
+        return new OwnedTranscriptionService(manager, service);
     }
 }
 
-internal sealed class OwnedHybridTranscriptionService : ITranscriptionService, IBenchmarkTranscriptionService
+internal sealed class OwnedTranscriptionService : ITranscriptionService
 {
     private readonly IModelManager _manager;
-    private readonly HybridTranscriptionService _inner;
+    private readonly ITranscriptionService _inner;
 
-    internal OwnedHybridTranscriptionService(IModelManager manager, bool enableContextualBias = false)
+    internal OwnedTranscriptionService(IModelManager manager, ITranscriptionService inner)
     {
         _manager = manager;
-        _inner = new HybridTranscriptionService(manager, enableContextualBias);
+        _inner = inner;
     }
 
     public Task WarmUpAsync(IProgress<ModelProgress>? progress, CancellationToken cancellationToken) =>
@@ -1359,10 +1315,6 @@ internal sealed class OwnedHybridTranscriptionService : ITranscriptionService, I
         string audioPath,
         IProgress<ModelProgress>? progress,
         CancellationToken cancellationToken) => _inner.TranscribeAsync(audioPath, progress, cancellationToken);
-
-    public Task<HybridTranscriptionObservation> TranscribeObservedAsync(
-        string audioPath,
-        CancellationToken cancellationToken) => _inner.TranscribeObservedAsync(audioPath, cancellationToken);
 
     public void Dispose()
     {
