@@ -20,7 +20,7 @@ if ((Test-Path -LiteralPath $destination) -and ((Get-Item -LiteralPath $destinat
 }
 if (!$UseExistingPublish) {
     if (Test-Path -LiteralPath $destination) { throw 'Choose a new staging directory; existing files are preserved.' }
-    & dotnet publish (Join-Path $projectRoot 'Egoist.Voice.csproj') -c Release -r win-x64 --self-contained true '-p:VoiceFlavor=Compact' -o $destination --nologo --verbosity minimal
+    & dotnet publish (Join-Path $projectRoot 'Egoist.Voice.csproj') -c Release -r win-x64 --self-contained true '-p:VoiceFlavor=Compact' '-p:PublishReadyToRun=true' -o $destination --nologo --verbosity minimal
     if ($LASTEXITCODE -ne 0) { throw 'Portable publish failed.' }
 }
 $executable = Join-Path $destination 'Egoist.Voice.exe'

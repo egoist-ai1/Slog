@@ -31,6 +31,12 @@
     <Company>EGOIST</Company>
     <Product>Egoist Voice</Product>
     <Description>Быстрая локальная русская диктовка для Windows</Description>
+    <!--
+      Предкомпиляция (ReadyToRun) сокращает JIT при старте. Действует только при публикации с
+      RuntimeIdentifier; обычная сборка и тесты не затронуты. Trim не включаем: WPF его не переносит.
+    -->
+    <PublishReadyToRun Condition="'$(RuntimeIdentifier)' != ''">true</PublishReadyToRun>
+    <SatelliteResourceLanguages>ru;en</SatelliteResourceLanguages>
   </PropertyGroup>
 
   <ItemGroup>
