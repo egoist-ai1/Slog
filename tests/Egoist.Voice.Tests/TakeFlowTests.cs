@@ -269,6 +269,60 @@ public sealed class MainWindowTakeFlowTests(CaptureWindowDispatcher dispatcher)
         await f.CancelAsync();
     });
 
+    private static async Task AssertCapsuleOpensToFullWidth(WindowFixture f)
+    {
+        await WaitUntil(() => f.Window.CurrentVisualKind == CapsuleVisualStateKind.Listening);
+        Assert.Equal(256, f.Window.CapsuleWidthTarget);
+        var deadline = DateTime.UtcNow.AddSeconds(1);
+        while (Math.Abs(f.Window.CapsuleWidth - 256) > 0.5 && DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        Assert.InRange(f.Window.CapsuleWidth, 255.5, 256.5);
+    }
+
+    [Fact]
+    public Task Press_while_inserted_capsule_is_visible_ends_with_full_width() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(configure: capture => capture.ReturnSpeech = true, initialReducedMotion: false,
+            delivery: new DictationDeliveryService(new NullClipboard(), new RecordingInsertion()) { RestoreClipboard = false });
+        await f.ReadyAsync();
+        f.Transcription.SampleHandler = (_, _) => Task.FromResult("текст");
+        f.Press(PushToTalkSource.Keyboard);
+        await f.ReleaseAsync(PushToTalkSource.Keyboard);
+        await WaitUntil(() => Math.Abs(f.Window.CapsuleWidth - 256) < 0.5);
+        f.Press(PushToTalkSource.Keyboard);
+        await AssertCapsuleOpensToFullWidth(f);
+        await f.CancelAsync();
+    });
+
+    [Fact]
+    public Task Press_while_capsule_shows_recognizing_ends_with_full_width() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(configure: capture => capture.ReturnSpeech = true, initialReducedMotion: false,
+            delivery: new DictationDeliveryService(new NullClipboard(), new RecordingInsertion()) { RestoreClipboard = false });
+        await f.ReadyAsync();
+        var gate = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        f.Transcription.SampleHandler = (call, _) => call == 1 ? gate.Task : Task.FromResult("второй");
+        f.Press(PushToTalkSource.Keyboard);
+        var releaseA = f.ReleaseAsync(PushToTalkSource.Keyboard);
+        await WaitUntil(() => f.Transcription.SampleCalls == 1 && f.Window.CurrentVisualKind == CapsuleVisualStateKind.Recognizing);
+        await WaitUntil(() => Math.Abs(f.Window.CapsuleWidth - 256) < 0.5);
+        f.Press(PushToTalkSource.Keyboard);
+        try { await AssertCapsuleOpensToFullWidth(f); }
+        finally { gate.SetResult("первый"); }
+        await f.CancelAsync();
+        await releaseA.WaitAsync(TimeSpan.FromSeconds(5));
+    });
+
+    [Fact]
+    public Task First_press_with_hidden_window_ends_with_full_width() => dispatcher.RunAsync(async () =>
+    {
+        await using var f = new WindowFixture(initialReducedMotion: false); await f.ReadyAsync();
+        Assert.False(f.Window.IsVisible);
+        f.Press(PushToTalkSource.Keyboard);
+        await AssertCapsuleOpensToFullWidth(f);
+        await f.CancelAsync();
+    });
+
     [Fact]
     public Task Fast_start_goes_straight_to_listening_without_connecting_label() => dispatcher.RunAsync(async () =>
     {

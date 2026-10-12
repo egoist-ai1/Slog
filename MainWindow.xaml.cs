@@ -818,6 +818,10 @@ public partial class MainWindow : Window, IDisposable
             // Stop() выше снял удержанные значения ухода, но базовые значения могли остаться любыми:
             // до первого кадра входа окно не должно успеть показаться в «полном» состоянии.
             PrepareShellForEnter();
+            // Окно скрыто: ширина должна совпасть с целью до первого кадра, без остатков анимации.
+            CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, null);
+            CapsuleBody.Width = _capsuleWidthTarget;
+            _capsuleWidthVersion++;
             Show();
             NativeMethods.ShowWithoutActivation(handle);
 

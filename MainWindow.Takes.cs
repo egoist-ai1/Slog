@@ -34,6 +34,8 @@ public partial class MainWindow
     internal int ActiveTakeCount => _activeTakes.Count;
     internal CapsuleVisualStateKind? CurrentVisualKind => _lastVisualStateKind;
     internal string? CurrentVisualLabel => _lastVisualLayout?.Label;
+    internal double CapsuleWidth => CapsuleBody.Width;
+    internal double CapsuleWidthTarget => _capsuleWidthTarget;
 
     private IEnumerable<Task?> PendingTakeTasks() =>
         _activeTakes.SelectMany(take => new[] { take.StartTask, take.StopTask });
@@ -64,7 +66,7 @@ public partial class MainWindow
 
     private async Task StartTakeAsync(TakeContext take)
     {
-        AppLog.Write("StartRecording requested");
+        AppLog.Write($"StartRecording requested capsuleVisible={IsVisible} kind={_lastVisualStateKind}");
         _recentRecordings.StopPlayback();
         _forceHideAfterCancellation = false;
         _hideTimer.Stop();
@@ -157,7 +159,7 @@ public partial class MainWindow
         handler = (_, _) =>
         {
             CompositionTarget.Rendering -= handler;
-            AppLog.Write($"Capsule first frame: {PushToTalkTiming.ElapsedMs(pressTimestamp, Stopwatch.GetTimestamp()):0}ms");
+            AppLog.Write($"Capsule first frame: {PushToTalkTiming.ElapsedMs(pressTimestamp, Stopwatch.GetTimestamp()):0}ms width={CapsuleBody.ActualWidth:0}/{_capsuleWidthTarget:0}");
         };
         CompositionTarget.Rendering += handler;
     }

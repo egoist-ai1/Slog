@@ -540,6 +540,8 @@ public partial class MainWindow
 
         CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, null);
         CapsuleBody.Width = 256;
+        _capsuleWidthTarget = 256;
+        _capsuleWidthVersion++;
 
         if (_hideRequested)
         {
@@ -641,13 +643,23 @@ public partial class MainWindow
     /// </remarks>
     private const double ArmingWidth = 48;
 
+    /// <summary>Конечное значение, которым сейчас владеет WidthProperty капсулы (совпадает с Width в xaml).</summary>
+    private double _capsuleWidthTarget = 256;
+
+    /// <summary>Номер последней запущенной анимации ширины: Completed вытесненной анимации игнорируется.</summary>
+    private int _capsuleWidthVersion;
+
     private void AnimateCapsuleWidth(double targetWidth, bool opening = false)
     {
-        var currentWidth = CapsuleBody.ActualWidth > 0 ? CapsuleBody.ActualWidth : CapsuleBody.Width;
-        if (Math.Abs(currentWidth - targetWidth) < 0.1)
+        // Сравниваем с целью, а не с ActualWidth: ActualWidth отстаёт на такт и при нажатии во время
+        // идущей анимации 256 -> 48 принимал устаревшие 256 за «уже достигнуто».
+        if (Math.Abs(_capsuleWidthTarget - targetWidth) < 0.1)
         {
             return;
         }
+
+        _capsuleWidthTarget = targetWidth;
+        var version = ++_capsuleWidthVersion;
 
         if (IsReducedMotion || !IsVisible)
         {
@@ -655,6 +667,10 @@ public partial class MainWindow
             CapsuleBody.Width = targetWidth;
             return;
         }
+
+        // Эффективная ширина с учётом идущей анимации (SnapshotAndReplace стартует с неё же).
+        var currentWidth = CapsuleBody.Width;
+        if (double.IsNaN(currentWidth) || currentWidth <= 0) currentWidth = CapsuleBody.ActualWidth;
 
         if (opening && targetWidth > currentWidth)
         {
@@ -666,6 +682,7 @@ public partial class MainWindow
             spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth,
                 KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), Motion.EaseInOut()));
             Timeline.SetDesiredFrameRate(spring, _motionFrameRate);
+            spring.Completed += (_, _) => VerifyCapsuleWidth(version);
             CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, spring, HandoffBehavior.SnapshotAndReplace);
             return;
         }
@@ -679,10 +696,24 @@ public partial class MainWindow
             FillBehavior = FillBehavior.HoldEnd
         };
         Timeline.SetDesiredFrameRate(animation, _motionFrameRate);
+        animation.Completed += (_, _) => VerifyCapsuleWidth(version);
         CapsuleBody.BeginAnimation(
             FrameworkElement.WidthProperty,
             animation,
             HandoffBehavior.SnapshotAndReplace);
+    }
+
+    /// <summary>
+    /// Страховка по завершении анимации ширины: если ширина не равна цели, лог и принудительная
+    /// установка. Completed вытесненной (устаревшей по <paramref name="version"/>) анимации игнорируется.
+    /// </summary>
+    private void VerifyCapsuleWidth(int version)
+    {
+        if (version != _capsuleWidthVersion) return;
+        if (Math.Abs(CapsuleBody.Width - _capsuleWidthTarget) <= 0.5) return;
+        AppLog.Write($"Capsule width mismatch: width={CapsuleBody.Width:0}, target={_capsuleWidthTarget:0}, kind={_lastVisualStateKind}");
+        CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, null);
+        CapsuleBody.Width = _capsuleWidthTarget;
     }
 
     /// <summary>Начальное состояние входа: прозрачно, масштаб 0,94, сдвиг 6 (как From в EnterStoryboard).</summary>
