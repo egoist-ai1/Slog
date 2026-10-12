@@ -46,14 +46,14 @@ public partial class App
 
             var modelsRoot = Environment.GetEnvironmentVariable("EGOIST_VOICE_MODELS_ROOT") is { Length: > 0 } fromEnv
                 ? Path.GetFullPath(fromEnv)
-                : FindUpwards(@"artifacts\Russian-2.4.2-resource-verified\portable\Models")
+                : FindUpwards(@"artifacts\models")
                     ?? throw new DirectoryNotFoundException("Models root not found; set EGOIST_VOICE_MODELS_ROOT.");
             Environment.SetEnvironmentVariable("EGOIST_VOICE_MODELS_ROOT", modelsRoot);
 
             string? encoderOverride = null;
             if (encoder == "fp32")
             {
-                encoderOverride = FindUpwards(@"artifacts\quality-2.3.1\float-exports\models\gigaam_v3_rnnt_encoder.onnx")
+                encoderOverride = FindUpwards(@"artifacts\models\fp32\gigaam_v3_rnnt_encoder.onnx")
                     ?? throw new FileNotFoundException("fp32 encoder not found.");
             }
 

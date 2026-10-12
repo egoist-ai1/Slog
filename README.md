@@ -69,7 +69,7 @@ pwsh .\scripts\Build-CompactPortable.ps1 -OutputDirectory .\artifacts\slog-3.2.0
 pwsh .\scripts\Build-CompactInstaller.ps1 -StagingDirectory .\artifacts\slog-3.2.0\portable -Build
 ```
 
-Для portable-сборки нужны восемь файлов весов GigaAM v3 (650 090 519 байт) в `artifacts/Russian-2.4.2-resource-verified/portable/Models/Speech/` (или путь через `-InstalledModelsRoot`). Скрипт проверяет размер и хеши и ничего не скачивает.
+Для portable-сборки нужны восемь файлов весов GigaAM v3 (650 090 519 байт) в `artifacts/models/Speech/` (или путь через `-InstalledModelsRoot`). Скрипт проверяет размер и хеши и ничего не скачивает.
 
 Сравнение конфигураций распознавания на своих записях: `Egoist.Voice.exe --asr-eval <папка корпуса> <out.json>` и `scripts/eval-asr.py`.
 

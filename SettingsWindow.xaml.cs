@@ -600,7 +600,11 @@ public partial class SettingsWindow : Window
             _loading = true;
             try { AutostartCheck.IsChecked = AutostartService.IsEnabled(); }
             finally { _loading = false; }
+            return;
         }
+
+        // Remember the explicit choice so startup restores the entry only while the user wants it.
+        _settingsService.Save(_settingsService.Load() with { Autostart = wanted });
     }
 
     private void SoundVolumeSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

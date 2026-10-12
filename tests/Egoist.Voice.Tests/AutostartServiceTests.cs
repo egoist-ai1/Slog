@@ -25,5 +25,30 @@ public sealed class AutostartServiceTests : IDisposable
     public void Disabling_when_nothing_is_registered_is_harmless() =>
         Assert.True(AutostartService.SetEnabled(false, "x", _key));
 
+    [Fact]
+    public void EnsureEnabled_fills_a_missing_entry_only_when_wanted()
+    {
+        Assert.False(AutostartService.EnsureEnabled(false, Exe, _key));
+        Assert.False(AutostartService.IsEnabled(_key));
+        Assert.True(AutostartService.EnsureEnabled(true, Exe, _key));
+        Assert.True(AutostartService.IsEnabled(_key));
+    }
+
+    [Fact]
+    public void EnsureEnabled_keeps_an_existing_entry_and_ignores_development_builds()
+    {
+        Assert.True(AutostartService.SetEnabled(true, Exe, _key));
+        Assert.False(AutostartService.EnsureEnabled(true, @"D:\other\Egoist.Voice.exe", _key));
+        using (var key = Registry.CurrentUser.OpenSubKey(_key))
+            Assert.Equal(AutostartService.CommandFor(Exe), key!.GetValue(AutostartService.ValueName));
+
+        Assert.True(AutostartService.SetEnabled(false, Exe, _key));
+        Assert.False(AutostartService.EnsureEnabled(true, @"C:\src\bin\Release\net8.0-windows\Egoist.Voice.exe", _key));
+        Assert.False(AutostartService.IsEnabled(_key));
+    }
+
+    [Fact]
+    public void Autostart_is_on_by_default_in_settings() => Assert.True(DictationSettings.Default.Autostart);
+
     public void Dispose() => Registry.CurrentUser.DeleteSubKeyTree(@"Software\SlogTests", throwOnMissingSubKey: false);
 }

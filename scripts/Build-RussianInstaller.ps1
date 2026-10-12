@@ -2,7 +2,7 @@
 param(
     [Parameter(Mandatory)][string]$OutputDirectory,
     [Parameter(Mandatory)][string]$WorkDirectory,
-    [string]$SpeechModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\quality-2.4.0\models\Models'),
+    [string]$SpeechModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\models'),
     [string]$TextModelPath,
     [string]$TextRuntimeZip,
     [string]$VcRuntimeDirectory,

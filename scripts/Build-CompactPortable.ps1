@@ -1,7 +1,7 @@
 ﻿[CmdletBinding()]
 param(
     [string]$OutputDirectory = '',
-    [string]$InstalledModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\Russian-2.4.2-resource-verified\portable\Models'),
+    [string]$InstalledModelsRoot = (Join-Path $PSScriptRoot '..\artifacts\models'),
     [switch]$UseExistingPublish,
     [string]$WorkDirectory = ''
 )

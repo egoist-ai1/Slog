@@ -26,6 +26,23 @@ internal static class AutostartService
         }
     }
 
+    /// <summary>
+    /// Restores the Run value when the user wants autostart but it is missing (fresh portable copy,
+    /// cleaned registry, reinstall). It only fills a gap: an existing value, even one pointing
+    /// elsewhere, is left alone, and a development build never registers itself.
+    /// </summary>
+    internal static bool EnsureEnabled(bool wanted, string? executablePath, string runKey = DefaultRunKey)
+    {
+        if (!wanted || string.IsNullOrEmpty(executablePath) || IsDevelopmentBuild(executablePath) || IsEnabled(runKey))
+            return false;
+        return SetEnabled(true, executablePath, runKey);
+    }
+
+    internal static bool IsDevelopmentBuild(string executablePath) =>
+        executablePath.Contains(@"\bin\Debug\", StringComparison.OrdinalIgnoreCase)
+        || executablePath.Contains(@"\bin\Release\", StringComparison.OrdinalIgnoreCase)
+        || executablePath.Contains(@"\artifacts\", StringComparison.OrdinalIgnoreCase);
+
     internal static bool SetEnabled(bool enabled, string executablePath, string runKey = DefaultRunKey)
     {
         try

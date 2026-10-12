@@ -492,6 +492,8 @@ public partial class App : System.Windows.Application
         window.RequestExit = RequestShutdown;
         window.InitializeHotkey();
         var background = e.Args.Contains("--background", StringComparer.OrdinalIgnoreCase);
+        var autostartWanted = settings.Autostart;
+        _ = Task.Run(() => AutostartService.EnsureEnabled(autostartWanted, Environment.ProcessPath));
         if (!background)
         {
             window.ShowReadyBriefly();

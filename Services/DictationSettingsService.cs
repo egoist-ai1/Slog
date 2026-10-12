@@ -33,6 +33,9 @@ public sealed record DictationSettings
 
     [JsonPropertyName("restoreClipboard")] public bool RestoreClipboard { get; init; } = true;
 
+    /// <summary>Start with Windows. On by default; only an explicit switch-off in Settings clears it.</summary>
+    [JsonPropertyName("autostart")] public bool Autostart { get; init; } = true;
+
     /// <summary>Forces the mixed-language fallback for every dictation.</summary>
     [JsonPropertyName("mixedLanguageMode")] public bool MixedLanguageMode { get; init; }
 
