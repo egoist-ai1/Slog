@@ -46,6 +46,10 @@ public sealed class PushToTalkTests
     [Theory]
     [InlineData("dota2.exe", null, true)]
     [InlineData("unknown.exe", @"D:\SteamLibrary\steamapps\common\Some Game\game.exe", true)]
+    [InlineData("FC26.exe", null, true)]
+    [InlineData("FC25", @"C:\Program Files\EA Games\EA SPORTS FC 25\FC25.exe", true)]
+    [InlineData("game.exe", @"D:\EA Games\Some Title\game.exe", true)]
+    [InlineData("fcpdf.exe", null, false)]
     [InlineData("chrome.exe", @"C:\Program Files\Google\Chrome\Application\chrome.exe", false)]
     [InlineData("Telegram.exe", null, false)]
     public void GamePolicyUsesKnownNamesAndInstallLocations(string process, string? path, bool expected)

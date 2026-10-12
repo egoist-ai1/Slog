@@ -14,6 +14,9 @@ internal static class GameForegroundPolicy
         "modernwarfare", "eldenring", "destiny2", "rainbowsix", "rainbowsix_vulkan"
     };
 
+    private static readonly System.Text.RegularExpressions.Regex EaSportsFcName =
+        new(@"^fc\d{2}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     private static readonly string[] GamePathMarkers =
     [
         @"\steamapps\common\",
@@ -21,13 +24,16 @@ internal static class GameForegroundPolicy
         @"\riot games\",
         @"\xboxgames\",
         @"\gog galaxy\games\",
-        @"\battle.net\"
+        @"\battle.net\",
+        @"\ea games\",
+        @"\origin games\"
     ];
 
     internal static bool IsGame(string processName, string? executablePath)
     {
         var normalizedName = Path.GetFileNameWithoutExtension(processName);
-        if (KnownGameProcesses.Contains(normalizedName))
+        // EA Sports FC: FC25, FC26 и далее.
+        if (KnownGameProcesses.Contains(normalizedName) || EaSportsFcName.IsMatch(normalizedName))
         {
             return true;
         }
