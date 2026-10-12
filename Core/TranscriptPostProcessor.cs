@@ -21,19 +21,35 @@ public sealed record PostProcessingOptions(
 /// </summary>
 public sealed class TranscriptPostProcessor
 {
-    private readonly VoiceCommandProcessor _commands;
+    private readonly Lazy<UserDictionary> _dictionary;
+    private readonly Lazy<VoiceCommandProcessor> _commands;
 
     public TranscriptPostProcessor(
         UserDictionary? dictionary = null,
         PostProcessingOptions? options = null,
         VoiceCommandProcessor? commands = null)
+        : this(new Lazy<UserDictionary>(dictionary ?? UserDictionary.Empty), options, commands)
     {
-        Dictionary = dictionary ?? UserDictionary.Empty;
-        Options = options ?? PostProcessingOptions.Default;
-        _commands = commands ?? new VoiceCommandProcessor();
     }
 
-    public UserDictionary Dictionary { get; }
+    /// <summary>
+    /// Takes the dictionary lazily: building it compiles over a thousand regular expressions, and
+    /// verbatim mode (<see cref="PostProcessingOptions.PreserveSpokenWords"/>) never reads it, so
+    /// start-up should not pay for it until a dictation actually needs it.
+    /// </summary>
+    public TranscriptPostProcessor(
+        Lazy<UserDictionary> dictionary,
+        PostProcessingOptions? options = null,
+        VoiceCommandProcessor? commands = null)
+    {
+        _dictionary = dictionary;
+        Options = options ?? PostProcessingOptions.Default;
+        _commands = commands is null
+            ? new Lazy<VoiceCommandProcessor>(() => new VoiceCommandProcessor())
+            : new Lazy<VoiceCommandProcessor>(commands);
+    }
+
+    public UserDictionary Dictionary => _dictionary.Value;
     public PostProcessingOptions Options { get; }
 
     public string Process(string text, EntityProfile entityProfile = EntityProfile.General)
@@ -53,7 +69,7 @@ public sealed class TranscriptPostProcessor
         // whitespace and capitalization are tidied last, over the final shape of the text.
         if (Options.ApplyDictionary)
         {
-            text = Dictionary.Apply(text, entityProfile);
+            text = _dictionary.Value.Apply(text, entityProfile);
         }
 
         if (Options.ApplyNumberNormalization)
@@ -63,7 +79,7 @@ public sealed class TranscriptPostProcessor
 
         if (Options.ApplyVoiceCommands)
         {
-            text = _commands.Apply(text);
+            text = _commands.Value.Apply(text);
         }
 
         return TranscriptNormalizer.Normalize(text);

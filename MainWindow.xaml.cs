@@ -929,8 +929,11 @@ public partial class MainWindow : Window, IDisposable
         var settings = _settingsService.Load();
         _currentTextSettings = settings;
         ApplyLocalQwenPreference(settings);
-        var dictionary = _settingsService.LoadDictionary();
-        _postProcessor = new TranscriptPostProcessor(dictionary, settings.ToPostProcessingOptions());
+        // Загружается при первом применении: в дословном режиме словарь не нужен вовсе.
+        var settingsService = _settingsService;
+        _postProcessor = new TranscriptPostProcessor(
+            new Lazy<UserDictionary>(() => settingsService.LoadDictionary()),
+            settings.ToPostProcessingOptions());
         _saveRecentRecordings = settings.SaveRecentRecordings;
         _delivery.RestoreClipboard = settings.RestoreClipboard;
         _sounds.Enabled = settings.SoundFeedback;
