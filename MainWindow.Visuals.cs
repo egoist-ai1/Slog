@@ -71,6 +71,7 @@ public partial class MainWindow
             StopStateAnimations();
             ((Storyboard)Resources["StateTransitionStoryboard"]).Stop(this);
             ((Storyboard)Resources["EnterStoryboard"]).Stop(this);
+            RestoreShellRest();
             CenterContent.Opacity = 1;
             StateContentTranslate.X = 0;
             // A pending finite exit still completes its existing hide contract.
@@ -140,7 +141,6 @@ public partial class MainWindow
         StopWaveformAnimation();
         SetStateDisc(System.Windows.Media.Brushes.Transparent);
         SetStateBorder(IdleBorderBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
     }
 
@@ -169,7 +169,6 @@ public partial class MainWindow
         StopWaveformAnimation();
         SetStateDisc(System.Windows.Media.Brushes.Transparent);
         SetStateBorder(IdleBorderBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
     }
 
@@ -180,8 +179,6 @@ public partial class MainWindow
         SetStateBorder(ActiveBorderBrush);
         SetWaveform(CapsuleWaveformProfile.MinimumScale);
         StopStateAnimations();
-        StateHalo.Opacity = 0.12;
-        StateHaloScale.ScaleX = StateHaloScale.ScaleY = 0.94;
         _audioLevelCurrent = 0;
         _audioLevelTarget = 0;
         _timbreBassCurrent = 0;
@@ -203,7 +200,6 @@ public partial class MainWindow
             StopWaveformAnimation();
             SetStateDisc(ActiveDiscBrush);
             SetStateBorder(ActiveBorderBrush);
-            StateHalo.Opacity = 0;
             StopStateAnimations();
             ShowCapsule();
         }
@@ -224,7 +220,6 @@ public partial class MainWindow
         StopWaveformAnimation();
         SetStateDisc(SuccessDiscBrush);
         SetStateBorder(IdleBorderBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
         BeginStateStoryboard("SuccessStoryboard");
         ShowCapsule();
@@ -241,7 +236,6 @@ public partial class MainWindow
         StopWaveformAnimation();
         SetStateDisc(SuccessDiscBrush);
         SetStateBorder(IdleBorderBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
         BeginStateStoryboard("SuccessStoryboard");
         ShowCapsule();
@@ -268,7 +262,6 @@ public partial class MainWindow
         ApplyThemeToCapsule();
         SetStateDisc(progress.Stage == ModelTransferStage.Ready ? SuccessDiscBrush : System.Windows.Media.Brushes.Transparent);
         SetStateBorder(progress.Stage == ModelTransferStage.Failed ? ErrorBrush : IdleBorderBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
         if (downloading)
         {
@@ -296,7 +289,6 @@ public partial class MainWindow
 
         // Recording uses a filled microphone disc; failures use a scarlet outline and error icon.
         SetStateBorder(ErrorBrush);
-        StateHalo.Opacity = 0;
         StopStateAnimations();
         BeginStateStoryboard("ErrorStoryboard");
         ShowCapsule();
@@ -525,14 +517,10 @@ public partial class MainWindow
         TailArc.Visibility = Visibility.Collapsed;
 
         CapsuleShell.Opacity = 1;
-        ShadowSurface.Opacity = 1;
         ShellScale.ScaleX = 1;
         ShellScale.ScaleY = 1;
         ShellTranslate.X = 0;
         ShellTranslate.Y = 0;
-        StateHalo.Opacity = 0;
-        StateHaloScale.ScaleX = 1;
-        StateHaloScale.ScaleY = 1;
         StateDiscScale.ScaleX = 1;
         StateDiscScale.ScaleY = 1;
         StateContentTranslate.X = 0;
@@ -590,11 +578,6 @@ public partial class MainWindow
             SetStroke(ErrorIcon, System.Windows.SystemColors.HighlightBrush);
             DownloadProgress.Foreground = System.Windows.SystemColors.HighlightBrush;
             DownloadProgress.Background = System.Windows.SystemColors.ControlBrush;
-            SurfaceGradient.Visibility = Visibility.Collapsed;
-            InnerSpecularBorder.Visibility = Visibility.Collapsed;
-            HoverSurface.Visibility = Visibility.Collapsed;
-            SuccessFlash.Visibility = Visibility.Collapsed;
-            ShadowSurface.Visibility = Visibility.Collapsed;
         }
         else
         {
@@ -620,11 +603,6 @@ public partial class MainWindow
             DownloadProgress.Background = ProgressTrackBrush;
             RootBorder.PhysicalStroke = _lastVisualStateKind == CapsuleVisualStateKind.Error ||
                 _lastVisualStateKind == CapsuleVisualStateKind.Downloading && _lastTransferStage == ModelTransferStage.Failed ? 1.25 : 0;
-            SurfaceGradient.Visibility = Visibility.Collapsed;
-            InnerSpecularBorder.Visibility = Visibility.Collapsed;
-            HoverSurface.Visibility = Visibility.Collapsed;
-            SuccessFlash.Visibility = Visibility.Collapsed;
-            ShadowSurface.Visibility = Visibility.Collapsed;
 
         }
     }
@@ -684,9 +662,10 @@ public partial class MainWindow
             var spring = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.HoldEnd };
             spring.KeyFrames.Add(new LinearDoubleKeyFrame(currentWidth, KeyTime.FromTimeSpan(TimeSpan.Zero)));
             spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth * 1.02,
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(110)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(110)), Motion.EaseOut()));
             spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth,
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), new CubicEase { EasingMode = EasingMode.EaseInOut }));
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), Motion.EaseInOut()));
+            Timeline.SetDesiredFrameRate(spring, _motionFrameRate);
             CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, spring, HandoffBehavior.SnapshotAndReplace);
             return;
         }
@@ -696,13 +675,32 @@ public partial class MainWindow
             From = currentWidth,
             To = targetWidth,
             Duration = TimeSpan.FromMilliseconds(210),
-            EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = Motion.QuinticEaseOut(),
             FillBehavior = FillBehavior.HoldEnd
         };
+        Timeline.SetDesiredFrameRate(animation, _motionFrameRate);
         CapsuleBody.BeginAnimation(
             FrameworkElement.WidthProperty,
             animation,
             HandoffBehavior.SnapshotAndReplace);
+    }
+
+    /// <summary>Начальное состояние входа: прозрачно, масштаб 0,94, сдвиг 6 (как From в EnterStoryboard).</summary>
+    private void PrepareShellForEnter()
+    {
+        CapsuleShell.Opacity = 0;
+        var reduced = IsReducedMotion;
+        ShellScale.ScaleX = ShellScale.ScaleY = reduced ? 1 : 0.94;
+        ShellTranslate.X = 0;
+        ShellTranslate.Y = reduced ? 0 : 6;
+    }
+
+    /// <summary>Состояние покоя оболочки; вызывается, когда вход завершён или остановлен.</summary>
+    private void RestoreShellRest()
+    {
+        CapsuleShell.Opacity = 1;
+        ShellScale.ScaleX = ShellScale.ScaleY = 1;
+        ShellTranslate.Y = 0;
     }
 
     private void StartWaveformAnimation()

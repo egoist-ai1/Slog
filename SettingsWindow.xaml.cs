@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Egoist.Voice.Controls;
 using Egoist.Voice.Core;
 using Egoist.Voice.Services;
 
@@ -68,28 +69,18 @@ public partial class SettingsWindow : Window
             _volumeSaveTimer.Stop();
             SaveGeneralSettings();
         };
+        // При первом показе приходят и IsVisibleChanged(true), и Loaded (первым идёт IsVisibleChanged,
+        // когда IsLoaded ещё false). Загрузка выполняется ровно один раз за показ.
         Loaded += (_, _) =>
         {
-            LoadGeneralSettings();
-            RefreshMicrophones();
-            RefreshHistory();
-            UpdateControlCenterState();
-            UpdateTranslationEngineState(_mainWindow.CurrentTranslationEngineHealth);
-            UpdateActivityTimers();
-            RequestMicrophoneInventoryRefresh();
+            if (IsVisible) LoadForShow();
         };
         IsVisibleChanged += (_, _) =>
         {
             if (IsVisible)
             {
                 FlushPendingVolumeSettings();
-                LoadGeneralSettings();
-                RefreshMicrophones();
-                RefreshHistory();
-                UpdateControlCenterState();
-                UpdateTranslationEngineState(_mainWindow.CurrentTranslationEngineHealth);
-                UpdateActivityTimers();
-                RequestMicrophoneInventoryRefresh();
+                if (IsLoaded) LoadForShow();
             }
             else
             {
@@ -665,6 +656,17 @@ public partial class SettingsWindow : Window
         SaveGeneralSettings();
     }
 
+    private void LoadForShow()
+    {
+        LoadGeneralSettings();
+        RefreshMicrophones();
+        RefreshHistory();
+        UpdateControlCenterState();
+        UpdateTranslationEngineState(_mainWindow.CurrentTranslationEngineHealth);
+        UpdateActivityTimers();
+        RequestMicrophoneInventoryRefresh();
+    }
+
     private void StopPageTransition()
     {
         if (_pageTransitionElement is not { } content) return;
@@ -694,15 +696,13 @@ public partial class SettingsWindow : Window
         _pageTransitionOffset = offset;
         content.RenderTransform = offset;
         content.Opacity = 0;
-        var easing = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-        content.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
-        {
-            EasingFunction = easing
-        });
-        offset.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(160))
-        {
-            EasingFunction = easing
-        });
+        var easing = Motion.QuadraticEaseOut();
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = easing };
+        var slide = new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(160)) { EasingFunction = easing };
+        Timeline.SetDesiredFrameRate(fade, _mainWindow.MotionFrameRate);
+        Timeline.SetDesiredFrameRate(slide, _mainWindow.MotionFrameRate);
+        content.BeginAnimation(OpacityProperty, fade);
+        offset.BeginAnimation(TranslateTransform.YProperty, slide);
     }
 
     private void UpdateAppearanceStatus()
@@ -1042,11 +1042,26 @@ public partial class SettingsWindow : Window
         }
     }
 
+    /// <summary>Опрос остаётся 50 мс; короткая анимация (80 мс) убирает «ступеньки» между отсчётами.</summary>
+    private void SetLevelMeterValue(double target)
+    {
+        if (_mainWindow.ReducedMotion || !IsVisible)
+        {
+            LevelMeter.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty, null);
+            LevelMeter.Value = target;
+            return;
+        }
+
+        var animation = new DoubleAnimation(target, TimeSpan.FromMilliseconds(80)) { EasingFunction = Motion.QuadraticEaseOut() };
+        Timeline.SetDesiredFrameRate(animation, _mainWindow.MotionFrameRate);
+        LevelMeter.BeginAnimation(System.Windows.Controls.Primitives.RangeBase.ValueProperty, animation);
+    }
+
     private void UpdateLevelMeter()
     {
         var state = _mainWindow.CurrentAudioCaptureState;
         var level = state.IsMonitoring ? Math.Clamp(_mainWindow.CurrentAudioLevel, 0, 1) : 0;
-        LevelMeter.Value = level * 100;
+        SetLevelMeterValue(level * 100);
         switch (AudioLevelBandPolicy.Classify((float)level))
         {
             case AudioLevelBand.Quiet:

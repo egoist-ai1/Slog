@@ -11,8 +11,9 @@ namespace Egoist.Voice.Services;
 public sealed class TrayService : IDisposable
 {
     private readonly Forms.NotifyIcon _notifyIcon;
-    private readonly Icon _icon;
-    private readonly Icon _pausedIcon;
+    private Icon _icon;
+    private Icon _pausedIcon;
+    private bool _disposed;
     private readonly MainWindow _window;
     private readonly IModelManager _modelManager;
     private readonly DictationSettingsService _settingsService;
@@ -162,6 +163,7 @@ public sealed class TrayService : IDisposable
         _window.AudioCaptureStateChanged += OnAudioCaptureStateChanged;
         _window.RecentRecordings.Changed += OnRecentRecordingsChanged;
         _themeService.ThemeChanged += OnThemeChanged;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         UpdateActivationChecks();
         RefreshAudioControls();
         RefreshHistoryMenu();
@@ -537,6 +539,40 @@ public sealed class TrayService : IDisposable
         EgoistTrayPalette.Apply(args.EffectiveTheme);
         ApplyDropDownTheme(_menu);
         RefreshSettingsChecks();
+        // Значок «пауза» берёт акцент из палитры, поэтому после смены темы его нужно перерисовать.
+        RebuildTrayIcons();
+    }
+
+    // Событие приходит из служебного потока SystemEvents: переносим в UI-поток окна.
+    private void OnDisplaySettingsChanged(object? sender, EventArgs args)
+    {
+        if (_disposed) return;
+        _window.Dispatcher.BeginInvoke(RebuildTrayIcons);
+    }
+
+    /// <summary>
+    /// Пересоздаёт значок и значок паузы под текущий размер SmallIcon и палитру
+    /// (смена DPI или монитора, смена темы). Старые значки освобождаются после подмены.
+    /// </summary>
+    private void RebuildTrayIcons()
+    {
+        if (_disposed) return;
+        try
+        {
+            var oldIcon = _icon;
+            var oldPaused = _pausedIcon;
+            var icon = LoadApplicationIcon();
+            var paused = CreatePausedIcon(icon);
+            _icon = icon;
+            _pausedIcon = paused;
+            _notifyIcon.Icon = _window.CurrentAudioCaptureState.IsUserPaused ? _pausedIcon : _icon;
+            oldPaused.Dispose();
+            oldIcon.Dispose();
+        }
+        catch (Exception exception)
+        {
+            AppLog.Write("Could not rebuild the tray icons", exception);
+        }
     }
 
     private void ApplyDropDownTheme(Forms.ToolStripDropDown dropDown)
@@ -618,6 +654,8 @@ public sealed class TrayService : IDisposable
 
     public void Dispose()
     {
+        _disposed = true;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _notifyIcon.Visible = false;
         _modelManager.ProgressChanged -= OnModelProgressChanged;
         _window.ActivationBindingChanged -= OnActivationBindingChanged;

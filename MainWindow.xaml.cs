@@ -28,7 +28,10 @@ public partial class MainWindow : Window, IDisposable
     private static readonly SolidColorBrush CapsuleMutedBrush = FrozenBrush("#9A9AA2");
     private static readonly SolidColorBrush LimeBrush = FrozenBrush("#A8FF00");
     private SolidColorBrush AccentBrush => LimeBrush;
-    private SolidColorBrush ErrorBrush => ActiveDiscBrush;
+    // Капсула всегда чёрная, поэтому берём янтарь тёмной темы (значение AppWarningBrush из Themes/Dark.xaml):
+    // контраст #F59E0B на #000000 = 9,8:1 (L = 0,439; (0,439 + 0,05) / (0 + 0,05)), порог 4,5:1.
+    private static readonly SolidColorBrush CapsuleErrorBrush = FrozenBrush("#F59E0B");
+    private SolidColorBrush ErrorBrush => CapsuleErrorBrush;
     private System.Windows.Media.Brush ErrorBorderBrush => CapsuleInkBrush;
     private SolidColorBrush ProgressTrackBrush => ThemeBrush("AppMeterTrackBrush");
 
@@ -156,6 +159,8 @@ public partial class MainWindow : Window, IDisposable
         _pushToTalk.SetPaused(capturePreference.IsCapturePaused);
         _captureInitializationTask = InitializeCaptureSnapshotAsync();
         _modelManager.ProgressChanged += OnModelProgressChanged;
+        ((Storyboard)Resources["EnterStoryboard"]).Completed += (_, _) => RestoreShellRest();
+        ((Storyboard)Resources["EnterReducedStoryboard"]).Completed += (_, _) => RestoreShellRest();
         _exitStoryboard.Completed += OnExitStoryboardCompleted;
         _exitReducedStoryboard.Completed += OnExitStoryboardCompleted;
         _hideTimer.Tick += (_, _) =>
@@ -709,7 +714,6 @@ public partial class MainWindow : Window, IDisposable
         ((Storyboard)Resources["EnterReducedStoryboard"]).Stop(this);
         BeginAnimation(WidthProperty, null);
         CapsuleShell.Opacity = 1;
-        ShadowSurface.Opacity = 1;
         ShellScale.ScaleX = 1;
         ShellScale.ScaleY = 1;
         ShellTranslate.Y = 0;
@@ -811,6 +815,9 @@ public partial class MainWindow : Window, IDisposable
         var handle = new WindowInteropHelper(this).Handle;
         if (!IsVisible)
         {
+            // Stop() выше снял удержанные значения ухода, но базовые значения могли остаться любыми:
+            // до первого кадра входа окно не должно успеть показаться в «полном» состоянии.
+            PrepareShellForEnter();
             Show();
             NativeMethods.ShowWithoutActivation(handle);
 
@@ -1017,7 +1024,6 @@ public partial class MainWindow : Window, IDisposable
     {
         ((Storyboard)Resources["SpinStoryboard"]).Stop(this);
         ((Storyboard)Resources["ProcessingStoryboard"]).Stop(this);
-        ((Storyboard)Resources["ListenPulseStoryboard"]).Stop(this);
         ((Storyboard)Resources["SuccessStoryboard"]).Stop(this);
         ((Storyboard)Resources["ErrorStoryboard"]).Stop(this);
         ((Storyboard)Resources["DownloadStoryboard"]).Stop(this);

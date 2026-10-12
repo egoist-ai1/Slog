@@ -157,26 +157,34 @@ public sealed class CapsuleWaveform : FrameworkElement
         DrawContour(drawingContext, tops, centre);
     }
 
-    /// <summary>Верхний и зеркальный контур одной геометрией: одна команда рисования вместо двух.</summary>
+    /// <summary>
+    /// Верхний и зеркальный контур одной геометрией: одна команда рисования вместо двух.
+    /// Сама геометрия нова на кадр намеренно: кадр хранит её как данные отрисовки, а менять замороженный
+    /// объект нельзя. Лишних выделений нет: без временных массивов, точки — структуры на стеке.
+    /// </summary>
     private static void DrawContour(DrawingContext context, System.Windows.Point[] tops, double centre)
     {
         var geometry = new StreamGeometry();
         using (var g = geometry.Open())
         {
-            foreach (var mirrored in new[] { false, true })
-            {
-                g.BeginFigure(Mirror(tops[0], centre, mirrored), false, false);
-                for (var i = 1; i < tops.Length; i++)
-                {
-                    var previous = Mirror(tops[i - 1], centre, mirrored);
-                    var current = Mirror(tops[i], centre, mirrored);
-                    var middle = (previous.X + current.X) / 2;
-                    g.BezierTo(new System.Windows.Point(middle, previous.Y), new System.Windows.Point(middle, current.Y), current, true, true);
-                }
-            }
+            AddFigure(g, tops, centre, mirrored: false);
+            AddFigure(g, tops, centre, mirrored: true);
         }
         geometry.Freeze();
         context.DrawGeometry(null, ContourPen, geometry);
+    }
+
+    private static void AddFigure(StreamGeometryContext g, System.Windows.Point[] tops, double centre, bool mirrored)
+    {
+        var previous = Mirror(tops[0], centre, mirrored);
+        g.BeginFigure(previous, false, false);
+        for (var i = 1; i < tops.Length; i++)
+        {
+            var current = Mirror(tops[i], centre, mirrored);
+            var middle = (previous.X + current.X) / 2;
+            g.BezierTo(new System.Windows.Point(middle, previous.Y), new System.Windows.Point(middle, current.Y), current, true, true);
+            previous = current;
+        }
     }
 
     private static System.Windows.Point Mirror(System.Windows.Point point, double centre, bool mirrored) =>
