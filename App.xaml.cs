@@ -632,7 +632,7 @@ public partial class App : System.Windows.Application
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
-            foreach (var descriptor in ModelCatalog.CreateRequiredModels())
+            foreach (var descriptor in ModelCatalog.CreateRussianQualityModels())
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, descriptor.DownloadUri);
                 request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 0);
@@ -1155,7 +1155,7 @@ public partial class App : System.Windows.Application
     {
         try
         {
-            using var manager = new ModelManager(ModelCatalog.CreateRequiredModels());
+            using var manager = new ModelManager(ModelCatalog.CreateCompactModels());
             using var service = new GigaAmTranscriptionService(manager);
             var cold = await service.TranscribeAsync(audioPath, null, CancellationToken.None);
             var warm = await service.TranscribeAsync(audioPath, null, CancellationToken.None);

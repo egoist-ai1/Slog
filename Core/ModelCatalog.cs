@@ -5,7 +5,6 @@ namespace Egoist.Voice.Core;
 public static class ModelCatalog
 {
     private const string GigaAmRevision = "6888903da215c7735f51101d939f3bfa679fb2b8";
-    private const string WhisperRevision = "5359861c739e955e79d9a303bcbc70fb988958b1";
     private const string OfficialGigaAmRevision = "ec1dc1f01d0d627ab2c0d3acc1e235702300d95e";
     private const string GigaAmBaseUri =
         "https://huggingface.co/Smirnov75/GigaAM-v3-sherpa-onnx/resolve/" + GigaAmRevision + "/";
@@ -96,25 +95,11 @@ public static class ModelCatalog
         "828c12c991019eef952a960661f25a92d6ad279591e2ea466b4aeddf1d20a18a",
         Optional: true);
 
-    public static readonly ModelDescriptor Whisper = new(
-        "whisper-large-v3-turbo-q5_0-v1",
-        "Whisper Large v3 Turbo",
-        ModelKind.Speech,
-        new Uri("https://huggingface.co/ggerganov/whisper.cpp/resolve/" + WhisperRevision + "/ggml-large-v3-turbo-q5_0.bin"),
-        "ggml-large-v3-turbo-q5_0.bin",
-        574_041_195,
-        "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2");
-
-    public static IReadOnlyList<ModelDescriptor> CreateRequiredModels() =>
-        [GigaAmEncoder, GigaAmDecoder, GigaAmJoiner, GigaAmTokens, Whisper];
-
     public static IReadOnlyList<ModelDescriptor> CreateCompactModels() =>
         [GigaAmEncoder, GigaAmDecoder, GigaAmJoiner, GigaAmTokens];
 
     public static IReadOnlyList<ModelDescriptor> CreateFormattingModels() =>
         [GigaAmE2eEncoder, GigaAmE2eDecoder, GigaAmE2eJoiner, GigaAmE2eTokens];
-
-    public static IReadOnlyList<ModelDescriptor> CreateWhisperRussianModels() => [Whisper];
 
     public static IReadOnlyList<ModelDescriptor> CreateRussianQualityModels() =>
         [GigaAmEncoder, GigaAmDecoder, GigaAmJoiner, GigaAmTokens,

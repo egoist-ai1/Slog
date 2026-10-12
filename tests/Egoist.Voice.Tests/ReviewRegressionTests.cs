@@ -87,26 +87,6 @@ public sealed class ReviewRegressionTests
         Assert.Equal("Это $100.", dictionary.Apply("Это сто баксов."));
     }
 
-    [Theory]
-    [InlineData("Это интеллектуальная задача.")]
-    [InlineData("Он хромает после травмы.")]
-    [InlineData("Нужен стимул продолжать.")]
-    [InlineData("Интеллигентный человек.")]
-    [InlineData("Сетчатый питон лежит на ветке.")]
-    public void Ordinary_russian_words_do_not_trigger_the_fallback(string transcript)
-    {
-        // Stems like "интел", "хром" and "стим" matched these words as prefixes, and every false
-        // trigger costs a full Whisper pass — the very latency the detector exists to avoid.
-        Assert.False(new MixedSpeechDetector().Inspect(transcript, false).NeedsFallback);
-    }
-
-    [Theory]
-    [InlineData("Открой гитхаб.")]
-    [InlineData("Разверни докер.")]
-    [InlineData("Спроси джемини.")]
-    public void Real_russified_terms_still_trigger_the_fallback(string transcript) =>
-        Assert.True(new MixedSpeechDetector().Inspect(transcript, false).NeedsFallback);
-
     [Fact]
     public void Non_ascii_digits_do_not_crash_the_scorer()
     {
@@ -132,37 +112,5 @@ public sealed class ReviewRegressionTests
             var events = TextInsertionService.PasteEventCount(method);
             Assert.True(events % 2 == 0, $"{method}: {events} событий — нажатия и отпускания не сбалансированы.");
         }
-    }
-
-    [Fact]
-    public void Whisper_unload_refuses_while_the_engine_is_busy()
-    {
-        // TryUnload took the factory lock with a zero timeout, but the decode path never held that
-        // lock — so the unload always succeeded and released the native context under a running
-        // decode. An access violation, not a catchable exception.
-        using var whisper = new WhisperTranscriptionService(new NeverReadyModelManager());
-
-        Assert.False(whisper.TryUnload());
-    }
-
-    private sealed class NeverReadyModelManager : IModelManager
-    {
-        public event EventHandler<ModelTransferProgress>? ProgressChanged
-        {
-            add { }
-            remove { }
-        }
-
-        public IReadOnlyList<ModelDescriptor> RequiredModels => [];
-        public bool AreAllModelsReady => false;
-        public ModelTransferProgress? CurrentProgress => null;
-
-        public Task<string> EnsureModelAsync(
-            ModelDescriptor descriptor,
-            IProgress<ModelTransferProgress>? progress,
-            CancellationToken cancellationToken) => throw new NotSupportedException();
-
-        public Task DownloadRequiredModelsAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-        public void Dispose() { }
     }
 }

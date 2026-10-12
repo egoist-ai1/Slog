@@ -45,7 +45,7 @@ public sealed class GigaAmTranscriptionService : ITranscriptionEngine, ISampleTr
         string engineName,
         bool formattingEngine)
     {
-        _modelManager = modelManager ?? new ModelManager(ModelCatalog.CreateRequiredModels());
+        _modelManager = modelManager ?? new ModelManager(ModelCatalog.CreateCompactModels());
         _ownsModelManager = modelManager is null;
         _enableContextualBias = enableContextualBias;
         _inferenceThreads = Math.Clamp(inferenceThreads ?? BenchmarkDecodeThreads, 1, 12);

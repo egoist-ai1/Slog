@@ -517,8 +517,7 @@ public sealed class LocalTextFormatterTests
         var models = ModelCatalog.CreateCompactModels();
         Assert.Equal(4, models.Count);
         Assert.Equal(323_768_215L, models.Sum(m => m.SizeBytes));
-        Assert.DoesNotContain(ModelCatalog.Whisper, models);
-        Assert.All(models, m => Assert.Contains(m, ModelCatalog.CreateRequiredModels()));
+        Assert.All(models, m => Assert.Contains(m, ModelCatalog.CreateRussianQualityModels()));
     }
 
     [Fact]

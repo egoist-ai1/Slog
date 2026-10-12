@@ -20,7 +20,6 @@ public sealed class GigaAmPlainRnntProfileTests
             Assert.Matches("^[a-f0-9]{64}$", model.Sha256);
         });
         Assert.DoesNotContain(ModelCatalog.GigaAmTokenizer, models);
-        Assert.DoesNotContain(ModelCatalog.Whisper, models);
     }
 
     [Fact]

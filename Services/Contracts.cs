@@ -152,21 +152,6 @@ public interface ISampleTranscriptionService
         CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// An engine whose native model can be released without discarding the service. Implemented by the
-/// mixed-language fallback, which is idle most of the time and expensive to keep resident.
-/// </summary>
-internal interface IUnloadableEngine
-{
-    /// <summary>Returns false when the model is already gone or currently in use.</summary>
-    bool TryUnload();
-}
-
-internal interface ITranscriptCandidateSelector
-{
-    TranscriptSelection Select(string gigaAm, string whisper);
-}
-
 public interface ITextInsertionService
 {
     Task InsertAsync(string text, nint targetWindow, CancellationToken cancellationToken);

@@ -32,9 +32,7 @@ public sealed class GigaAmFormattingProfileTests
         Assert.Equal(650_090_519L, quality.Sum(model => model.SizeBytes));
         Assert.Equal(8, quality.Select(model => model.Id).Distinct().Count());
         Assert.Equal(plain.Concat(formatting), quality);
-        Assert.Equal(plain.Concat([ModelCatalog.Whisper]), ModelCatalog.CreateRequiredModels());
         Assert.DoesNotContain(ModelCatalog.GigaAmTokenizer, quality);
-        Assert.DoesNotContain(ModelCatalog.Whisper, quality);
     }
 
     [Fact]

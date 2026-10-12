@@ -152,28 +152,6 @@ public sealed class TranscriptionPipelineTests
     }
 
     [Fact]
-    public void Selector_rejects_a_whisper_run_that_loops_on_itself()
-    {
-        var selected = new MixedLanguageTranscriptSelector().Select(
-            "Продолжение следует.",
-            "Продолжение следует далее. Продолжение следует далее. Продолжение следует далее.");
-
-        Assert.Equal("GigaAM", selected.Engine);
-    }
-
-    [Fact]
-    public void Selector_rejects_english_output_several_times_longer_than_the_russian_one()
-    {
-        // credibleEnglish used to bypass the length check entirely, so runaway decoding won
-        // unconditionally as long as it contained enough Latin letters.
-        var selected = new MixedLanguageTranscriptSelector().Select(
-            "Привет.",
-            "Hello there my friend this is a very long hallucinated English sentence that never happened.");
-
-        Assert.Equal("GigaAM", selected.Engine);
-    }
-
-    [Fact]
     public void Chunk_joiner_closes_the_window_after_a_fully_duplicated_chunk()
     {
         // A chunk that contributes nothing leaves no boundary to match against. Treating that as
@@ -213,13 +191,6 @@ public sealed class TranscriptionPipelineTests
         service.Dispose();
         service.Dispose();
     }
-
-    [Theory]
-    [InlineData("один два три четыре пять шесть семь восемь девять", false)]
-    [InlineData("спасибо за внимание спасибо за внимание спасибо за внимание спасибо за внимание", true)]
-    [InlineData("короткая фраза", false)]
-    public void Repeated_ngram_detector_fires_only_on_consecutive_repetition(string text, bool expected) =>
-        Assert.Equal(expected, MixedLanguageTranscriptSelector.HasRepeatedNgram(text));
 
     private static float[] LoudSignal(int length) => Constant(length, 0.5f);
 

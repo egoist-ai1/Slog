@@ -143,16 +143,6 @@ public sealed class BuiltInVocabularyTests
     }
 
     [Fact]
-    public void Built_in_terms_feed_the_mixed_speech_detector()
-    {
-        var detector = new MixedSpeechDetector(
-            MixedSpeechDetector.DeriveRussifiedForms(BuiltInVocabulary.SpokenForms));
-
-        Assert.True(detector.Inspect("Спроси у джемини.", false).NeedsFallback);
-        Assert.False(detector.Inspect("Обычная фраза без терминов.", false).NeedsFallback);
-    }
-
-    [Fact]
     public void Every_shipped_entry_is_well_formed()
     {
         foreach (var term in BuiltInVocabulary.Terms)
