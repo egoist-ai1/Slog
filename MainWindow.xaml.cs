@@ -57,7 +57,6 @@ public partial class MainWindow : Window, IDisposable
     private readonly CancelKeyWatcher? _cancelKey;
     private readonly MainWindowInteractionHooks _interactionHooks;
     private TranscriptPostProcessor _postProcessor = new();
-    private bool _mixedLanguageMode;
     private bool _saveRecentRecordings;
 
     // Голосовая команда «переведи …»: локальный переводчик EGOIST (HY-MT1.5).
@@ -766,8 +765,6 @@ public partial class MainWindow : Window, IDisposable
     private void CapsuleContextMenu_OnOpened(object sender, RoutedEventArgs e)
     {
         var settings = _settingsService.Load();
-        MenuDirectFastMode.IsChecked = settings.DirectGigaamFastMode;
-        MenuDirectFastMode.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
         MenuFormatWithQwen.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
         MenuFormatWithQwen.IsChecked = settings.FormatWithQwen && !settings.PreserveSpokenWords;
         MenuSoundFeedback.IsChecked = _sounds.Enabled;
@@ -776,13 +773,6 @@ public partial class MainWindow : Window, IDisposable
     private void MenuSettings_OnClick(object sender, RoutedEventArgs e) => RequestOpenSettings?.Invoke();
 
     private void MenuHistory_OnClick(object sender, RoutedEventArgs e) => RequestOpenHistory?.Invoke();
-
-    private void MenuDirectFastMode_OnClick(object sender, RoutedEventArgs e)
-    {
-        var current = _settingsService.Load();
-        _settingsService.Save(current with { DirectGigaamFastMode = MenuDirectFastMode.IsChecked });
-        ApplyDictationSettings();
-    }
 
     private void MenuFormatWithQwen_OnClick(object sender, RoutedEventArgs e)
     {
@@ -941,7 +931,6 @@ public partial class MainWindow : Window, IDisposable
         ApplyLocalQwenPreference(settings);
         var dictionary = _settingsService.LoadDictionary();
         _postProcessor = new TranscriptPostProcessor(dictionary, settings.ToPostProcessingOptions());
-        _mixedLanguageMode = settings.MixedLanguageMode && !settings.PreserveSpokenWords && !VoiceRuntimeProfile.IsPortable;
         _saveRecentRecordings = settings.SaveRecentRecordings;
         _delivery.RestoreClipboard = settings.RestoreClipboard;
         _sounds.Enabled = settings.SoundFeedback;
@@ -959,17 +948,6 @@ public partial class MainWindow : Window, IDisposable
             russianQuality.FormatSpeechPunctuation = settings.FormatSpeechPunctuation;
         }
 
-        if (_transcription is HybridTranscriptionService hybrid)
-        {
-            hybrid.MixedLanguageMode = settings.MixedLanguageMode && !settings.PreserveSpokenWords;
-            hybrid.FastModeNoWhisperRefinement = settings.PreserveSpokenWords ||
-                (settings.DirectGigaamFastMode && !settings.MixedLanguageMode);
-
-            // Every dictionary term also becomes a suspicion for the mixed-speech detector, so a
-            // user-added word starts pulling in the fallback without a second list to maintain.
-            // The built-in entries are included: they are the terms most likely to appear.
-            hybrid.UpdateVocabulary(dictionary.SpokenForms);
-        }
     }
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)

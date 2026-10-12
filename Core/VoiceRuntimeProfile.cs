@@ -22,11 +22,8 @@ public static class VoiceRuntimeProfile
         : IsPortable
         ? Path.Combine(AppContext.BaseDirectory, "Models")
         : Path.Combine(DataRoot, "Models");
-    // Слог 3.2: портативный профиль снова GigaAM v3 (слова) + E2E (пунктуация и регистр по аудио).
-    // Whisper остаётся только в полной версии и в бенчмарках.
-    public static IReadOnlyList<ModelDescriptor> Models => IsPortable
-        ? ModelCatalog.CreateRussianQualityModels() : ModelCatalog.CreateRequiredModels();
-    public static string Label => IsPortable ? "Русская речь · GigaAM v3 · офлайн" : "Полная версия · GigaAM + Whisper";
-    public static ITranscriptionService CreateTranscription(IModelManager manager) => IsPortable
-        ? new RussianSpeechQualityService(manager) : new HybridTranscriptionService(manager);
+    // Слог 3.3: интерактивная диктовка всегда идёт через GigaAM v3 + E2E.
+    public static IReadOnlyList<ModelDescriptor> Models => ModelCatalog.CreateRussianQualityModels();
+    public static string Label => IsPortable ? "Русская речь · GigaAM v3 · офлайн" : "Полная версия · GigaAM v3";
+    public static ITranscriptionService CreateTranscription(IModelManager manager) => new RussianSpeechQualityService(manager);
 }

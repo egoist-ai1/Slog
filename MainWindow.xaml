@@ -340,7 +340,6 @@
                             </MenuItem.Icon>
                         </MenuItem>
                         <Separator />
-                        <MenuItem x:Name="MenuDirectFastMode" Header="Быстрый режим (Direct ASR)" IsCheckable="True" Click="MenuDirectFastMode_OnClick" />
                         <MenuItem x:Name="MenuFormatWithQwen" Header="Пунктуация и абзацы · Qwen" IsCheckable="True" Click="MenuFormatWithQwen_OnClick" />
                         <MenuItem x:Name="MenuSoundFeedback" Header="Звуковые сигналы" IsCheckable="True" Click="MenuSoundFeedback_OnClick" />
                         <Separator />

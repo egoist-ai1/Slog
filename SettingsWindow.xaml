@@ -524,10 +524,6 @@
                                 <StackPanel>
                                     <TextBlock Text="Распознавание и вставка" Style="{StaticResource SectionTitle}" />
                                     <CheckBox x:Name="SpeechPunctuationCheck" Content="Пунктуация и написание известных названий" Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" AutomationProperties.Name="Пунктуация по аудио" />
-                                    <CheckBox x:Name="DirectFastModeCheck" Content="Быстрый режим: прямое распознавание без задержек Whisper" Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
-                                    <TextBlock x:Name="DirectFastModeHint" Text="Распознавание русской речи через GigaAM v3 RNNT. Отключает повторную сверку Whisper для ускорения вставки."
-                                               Style="{StaticResource Hint}" Margin="26,2,0,8" />
-                                    <CheckBox x:Name="MixedLanguageCheck" Content="Смешанная русско-английская речь" Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
                                     <CheckBox x:Name="NumbersCheck" Content="Преобразовывать числа в цифры" Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
                                     <CheckBox x:Name="VoiceCommandsCheck" Content="Выполнять голосовые команды" Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
                                 </StackPanel>
@@ -569,7 +565,7 @@
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
                                         <TextBlock Text="Модели распознавания" Style="{StaticResource SectionTitle}" />
-                                        <TextBlock x:Name="RecognitionModelStatusText" Text="Whisper turbo"
+                                        <TextBlock x:Name="RecognitionModelStatusText" Text="GigaAM v3"
                                                    Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite" />
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

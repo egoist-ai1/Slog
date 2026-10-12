@@ -120,14 +120,6 @@ public partial class MainWindow
         {
             ShowModelsReady();
         }
-        else if (progress.Stage == ModelTransferStage.Failed &&
-                 progress.ModelName.StartsWith("Whisper", StringComparison.OrdinalIgnoreCase))
-        {
-            AppLog.Write("Whisper fallback download failed; GigaAM remains available");
-            SetReadyState();
-            ShowCapsule();
-            ScheduleHide();
-        }
         else if (progress.Stage == ModelTransferStage.Failed)
         {
             ShowError("Модель не загружена");

@@ -258,7 +258,7 @@ public partial class MainWindow
             var entityProfile = EntityProfilePolicy.ResolveForWindow(
                 take.TargetWindow,
                 result.Text,
-                _mixedLanguageMode);
+                false);
             var text = _postProcessor.Process(result.Text, entityProfile);
             trace.Mark(DictationStage.TextFormatted);
             AppLog.Write($"Transcription complete: characters={text.Length}, elapsed={result.Elapsed.TotalSeconds:0.00}s");

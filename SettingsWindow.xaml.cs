@@ -326,16 +326,8 @@ public partial class SettingsWindow : Window
             LoadTextSettings(settings);
             SpeechPunctuationCheck.IsChecked = settings.FormatSpeechPunctuation;
             SpeechPunctuationCheck.Visibility = Visibility.Collapsed;
-            DirectFastModeCheck.IsChecked = settings.DirectGigaamFastMode;
-            DirectFastModeCheck.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
-            DirectFastModeHint.Text = VoiceRuntimeProfile.IsPortable
-                ? "Русская речь распознаётся локально моделью GigaAM v3 со словарём: пунктуация и регистр определяются по голосу. Модель всегда готова в памяти, ожидания перед записью нет."
-                : "GigaAM распознаёт русскую речь. Дополнительная сверка Whisper может помочь смешанной речи, но увеличивает ожидание.";
-            MixedLanguageCheck.IsChecked = settings.MixedLanguageMode && !VoiceRuntimeProfile.IsPortable;
-            MixedLanguageCheck.IsEnabled = !VoiceRuntimeProfile.IsPortable && !settings.PreserveSpokenWords;
-            DirectFastModeCheck.IsEnabled = NumbersCheck.IsEnabled = VoiceCommandsCheck.IsEnabled =
+            NumbersCheck.IsEnabled = VoiceCommandsCheck.IsEnabled =
                 !settings.PreserveSpokenWords;
-            MixedLanguageCheck.Visibility = VoiceRuntimeProfile.IsPortable ? Visibility.Collapsed : Visibility.Visible;
             NumbersCheck.IsChecked = settings.ApplyNumberNormalization;
             VoiceCommandsCheck.IsChecked = settings.ApplyVoiceCommands;
             AutostartCheck.IsChecked = AutostartService.IsEnabled();
@@ -628,8 +620,6 @@ public partial class SettingsWindow : Window
         _settingsService.Save(current with
         {
             FormatSpeechPunctuation = SpeechPunctuationCheck.IsChecked == true,
-            DirectGigaamFastMode = DirectFastModeCheck.IsChecked == true,
-            MixedLanguageMode = MixedLanguageCheck.IsChecked == true,
             ApplyNumberNormalization = NumbersCheck.IsChecked == true,
             ApplyVoiceCommands = VoiceCommandsCheck.IsChecked == true,
             RestoreClipboard = RestoreClipboardCheck.IsChecked == true,

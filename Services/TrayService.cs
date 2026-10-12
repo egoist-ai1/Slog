@@ -28,7 +28,6 @@ public sealed class TrayService : IDisposable
     private readonly Forms.ToolStripMenuItem _retryDownload;
     private readonly Forms.ToolStripMenuItem _customActivationItem;
     private readonly Dictionary<ActivationBinding, Forms.ToolStripMenuItem> _activationItems = [];
-    private readonly Forms.ToolStripMenuItem _mixedLanguageItem;
     private readonly Forms.ToolStripMenuItem _numbersItem;
     private readonly Forms.ToolStripMenuItem _voiceCommandsItem;
     private readonly Forms.ToolStripMenuItem _restoreClipboardItem;
@@ -90,8 +89,6 @@ public sealed class TrayService : IDisposable
         // feature that does not exist.
         var settingsMenu = CreateItem("Настройки");
         ConfigureDropDown(settingsMenu.DropDown, renderer);
-        _mixedLanguageItem = AddToggle(settingsMenu, "Смешанная русско-английская речь",
-            settings => settings with { MixedLanguageMode = !settings.MixedLanguageMode });
         _numbersItem = AddToggle(settingsMenu, "Числа цифрами",
             settings => settings with { ApplyNumberNormalization = !settings.ApplyNumberNormalization });
         _voiceCommandsItem = AddToggle(settingsMenu, "Голосовые команды",
@@ -124,8 +121,8 @@ public sealed class TrayService : IDisposable
         RefreshSettingsChecks();
 
         _modelStatus = CreateItem(modelManager.AreAllModelsReady
-            ? (VoiceRuntimeProfile.IsPortable ? "GigaAM v3 · готово" : "GigaAM + Whisper · готовы")
-            : (VoiceRuntimeProfile.IsPortable ? "GigaAM v3 · подготовка…" : "GigaAM + Whisper · подготовка…"));
+            ? "GigaAM v3 · готово"
+            : "GigaAM v3 · подготовка…");
         _modelStatus.Enabled = false;
         menu.Items.Add(_modelStatus);
 
@@ -193,7 +190,6 @@ public sealed class TrayService : IDisposable
     private void RefreshSettingsChecks()
     {
         var settings = _settingsService.Load();
-        _mixedLanguageItem.Checked = settings.MixedLanguageMode;
         _numbersItem.Checked = settings.ApplyNumberNormalization;
         _voiceCommandsItem.Checked = settings.ApplyVoiceCommands;
         _restoreClipboardItem.Checked = settings.RestoreClipboard;
@@ -604,9 +600,9 @@ public sealed class TrayService : IDisposable
         var failed = progress.Stage == ModelTransferStage.Failed;
         var ready = progress.Stage == ModelTransferStage.Ready && _modelManager.AreAllModelsReady;
         _modelStatus.Text = failed
-            ? (VoiceRuntimeProfile.IsPortable ? "GigaAM v3 · ошибка загрузки" : "GigaAM + Whisper · ошибка загрузки")
+            ? "GigaAM v3 · ошибка загрузки"
             : ready
-                ? (VoiceRuntimeProfile.IsPortable ? "GigaAM v3 · готово" : "GigaAM + Whisper · готовы")
+                ? "GigaAM v3 · готово"
                 : ModelProgressFormatter.Detail(progress);
         _showDownload.Visible = !ready && !failed;
         _retryDownload.Visible = failed;

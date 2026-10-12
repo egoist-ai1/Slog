@@ -36,12 +36,6 @@ public sealed record DictationSettings
     /// <summary>Start with Windows. On by default; only an explicit switch-off in Settings clears it.</summary>
     [JsonPropertyName("autostart")] public bool Autostart { get; init; } = true;
 
-    /// <summary>Forces the mixed-language fallback for every dictation.</summary>
-    [JsonPropertyName("mixedLanguageMode")] public bool MixedLanguageMode { get; init; }
-
-    /// <summary>Bypasses Whisper refinement for ultra-fast direct ASR when speaking Russian.</summary>
-    [JsonPropertyName("directGigaamFastMode")] public bool DirectGigaamFastMode { get; init; } = true;
-
     [JsonPropertyName("soundFeedback")] public bool SoundFeedback { get; init; } = false;
     [JsonPropertyName("soundVolume")] public double SoundVolume { get; init; } = 0.32;
 

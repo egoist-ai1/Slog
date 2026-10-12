@@ -20,7 +20,6 @@ public sealed class DictationSettingsTests : IDisposable
 
         Assert.True(settings.ApplyDictionary);
         Assert.True(settings.ApplyVoiceCommands);
-        Assert.True(settings.DirectGigaamFastMode);
         Assert.True(settings.RestoreClipboard);
         Assert.True(settings.SaveRecentRecordings);
         Assert.True(settings.DesktopNotifications);
@@ -39,8 +38,6 @@ public sealed class DictationSettingsTests : IDisposable
         service.Save(DictationSettings.Default with
         {
             ApplyNumberNormalization = true,
-            DirectGigaamFastMode = false,
-            MixedLanguageMode = true,
             SoundVolume = 0.75,
             CaptureDeviceId = "endpoint-stable-id",
             IsCapturePaused = true,
@@ -52,8 +49,6 @@ public sealed class DictationSettingsTests : IDisposable
         var loaded = service.Load();
 
         Assert.True(loaded.ApplyNumberNormalization);
-        Assert.False(loaded.DirectGigaamFastMode);
-        Assert.True(loaded.MixedLanguageMode);
         Assert.Equal(0.75, loaded.SoundVolume);
         Assert.Equal("endpoint-stable-id", loaded.CaptureDeviceId);
         Assert.True(loaded.IsCapturePaused);
@@ -148,13 +143,32 @@ public sealed class DictationSettingsTests : IDisposable
         var service = Service;
         Directory.CreateDirectory(_root);
         File.WriteAllText(service.SettingsPath,
-            """{ "directGigaamFastMode": false, "isPaused": true }""");
+            """{ "isPaused": true }""");
 
         var loaded = service.Load();
 
         Assert.True(loaded.FormatSpeechPunctuation);
-        Assert.False(loaded.DirectGigaamFastMode);
         Assert.True(loaded.IsCapturePaused);
+    }
+
+    [Fact]
+    public void Removed_engine_keys_in_old_settings_are_ignored_and_dropped_on_save()
+    {
+        var service = Service;
+        Directory.CreateDirectory(_root);
+        File.WriteAllText(service.SettingsPath,
+            """{ "mixedLanguageMode": true, "directGigaamFastMode": false, "isPaused": true, "soundVolume": 0.5 }""");
+
+        var loaded = service.Load();
+
+        Assert.True(loaded.IsCapturePaused);
+        Assert.Equal(0.5, loaded.SoundVolume);
+
+        service.Save(loaded);
+        var json = File.ReadAllText(service.SettingsPath);
+        Assert.DoesNotContain("mixedLanguageMode", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("directGigaamFastMode", json, StringComparison.Ordinal);
+        Assert.Equal(0.5, service.Load().SoundVolume);
     }
 
     [Fact]
