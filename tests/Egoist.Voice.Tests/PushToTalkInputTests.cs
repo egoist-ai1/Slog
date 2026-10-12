@@ -11,6 +11,51 @@ public sealed class PushToTalkInputTests
     {
         Assert.Equal(70, PushToTalkTiming.ReleaseDebounceMs);
         Assert.Equal(180, PushToTalkTiming.ShortTapMs);
+        Assert.Equal(60, PushToTalkTiming.GlitchReleaseMs);
+        Assert.Equal(250, PushToTalkTiming.GlitchGraceMs);
+    }
+
+    [Fact]
+    public void GlitchReleaseGetsLongGraceWindow()
+    {
+        var debounce = new ButtonDebounce();
+        debounce.OnDown(Ms(0));
+        Assert.True(debounce.OnUp(Ms(40)));
+        Assert.Equal(PushToTalkTiming.GlitchGraceMs, debounce.ReleaseWindowMs);
+
+        Assert.False(debounce.TryCommitRelease(Ms(40 + PushToTalkTiming.GlitchGraceMs - 1), out _));
+        Assert.True(debounce.TryCommitRelease(Ms(40 + PushToTalkTiming.GlitchGraceMs), out var args));
+        Assert.True(args.IsShortTap);
+    }
+
+    [Fact]
+    public void PressWithinGlitchGraceAfterEarlyReleaseIsBounce()
+    {
+        var debounce = new ButtonDebounce();
+        debounce.OnDown(Ms(0));
+        debounce.OnUp(Ms(40));
+
+        Assert.Equal(DebounceDownResult.Bounce, debounce.OnDown(Ms(40 + 200)));
+        Assert.True(debounce.IsHeld);
+        Assert.False(debounce.ReleasePending);
+    }
+
+    [Fact]
+    public void ReleaseAtSixtyMillisecondsKeepsRegularWindow()
+    {
+        var debounce = new ButtonDebounce();
+        debounce.OnDown(Ms(0));
+        debounce.OnUp(Ms(PushToTalkTiming.GlitchReleaseMs));
+        Assert.Equal(PushToTalkTiming.ReleaseDebounceMs, debounce.ReleaseWindowMs);
+
+        // Следующий нормальный цикл возвращается к обычному окну после глитча.
+        var glitch = new ButtonDebounce();
+        glitch.OnDown(Ms(0));
+        glitch.OnUp(Ms(30));
+        Assert.True(glitch.TryCommitRelease(Ms(400), out _));
+        glitch.OnDown(Ms(1000));
+        glitch.OnUp(Ms(1500));
+        Assert.Equal(PushToTalkTiming.ReleaseDebounceMs, glitch.ReleaseWindowMs);
     }
 
     [Fact]
@@ -80,7 +125,7 @@ public sealed class PushToTalkInputTests
         var debounce = new ButtonDebounce();
         debounce.OnDown(Ms(0));
         debounce.OnUp(Ms(heldMs));
-        Assert.True(debounce.TryCommitRelease(Ms(heldMs + 200), out var args));
+        Assert.True(debounce.TryCommitRelease(Ms(heldMs + 300), out var args));
 
         Assert.Equal(expected, args.IsShortTap);
         Assert.InRange(args.HeldMilliseconds, heldMs - 0.5, heldMs + 0.5);
@@ -175,9 +220,59 @@ public sealed class PushToTalkInputTests
 
         trace.Add(Ms(0), 'D');
         trace.Add(Ms(95), 'U');
-        Assert.Equal("D+0 U+95", trace.Format());
+        trace.Add(Ms(130), 'd');
+        trace.Add(Ms(170), 'u');
+        Assert.Equal("D+0 U+95 d+130 u+170", trace.Format());
 
         trace.Clear();
         Assert.Equal("(empty)", trace.Format());
+    }
+
+    [Fact]
+    public void WatchdogTwoSuspiciousWindowsInARowReinstallTwice()
+    {
+        var first = HookWatchdog.Evaluate(true, false, true, false, 1, false);
+        var second = HookWatchdog.Evaluate(true, false, true, false, 1, false);
+
+        Assert.True(first.Reinstall);
+        Assert.True(second.Reinstall);
+        Assert.False(first.ReleaseHeld);
+    }
+
+    [Fact]
+    public void WatchdogHeldWithAliveOldHookDoesNotRelease()
+    {
+        var decision = HookWatchdog.Evaluate(true, false, true, true, 2, false);
+
+        Assert.True(decision.Reinstall);
+        Assert.False(decision.ReleaseHeld);
+    }
+
+    [Fact]
+    public void WatchdogHeldWithInvalidHookAndTwoWindowsReleases()
+    {
+        var decision = HookWatchdog.Evaluate(true, false, true, true, 2, true);
+
+        Assert.True(decision.Reinstall);
+        Assert.True(decision.ReleaseHeld);
+    }
+
+    [Fact]
+    public void WatchdogHeldFirstWindowWaits()
+    {
+        var decision = HookWatchdog.Evaluate(true, false, true, true, 1, true);
+
+        Assert.Equal(WatchdogVerdict.Wait, decision.Verdict);
+        Assert.Equal(1, decision.NewStreak);
+        Assert.False(decision.Reinstall);
+        Assert.False(decision.ReleaseHeld);
+    }
+
+    [Fact]
+    public void WatchdogIgnoresSyntheticMovesAndHealthyWindows()
+    {
+        Assert.Equal(WatchdogVerdict.Synthetic, HookWatchdog.Evaluate(true, false, false, true, 1, true).Verdict);
+        Assert.Equal(WatchdogVerdict.Healthy, HookWatchdog.Evaluate(true, true, true, true, 1, true).Verdict);
+        Assert.Equal(WatchdogVerdict.Healthy, HookWatchdog.Evaluate(false, false, true, true, 1, true).Verdict);
     }
 }

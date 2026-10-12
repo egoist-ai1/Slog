@@ -12,6 +12,18 @@ internal static class PushToTalkTiming
     /// </summary>
     internal const int ReleaseDebounceMs = 70;
 
+    /// <summary>
+    /// Отпускание раньше этого после нажатия — «глитч» (у кнопки Up приходит через ~40 мс после Down):
+    /// настоящий палец так быстро не отпускает.
+    /// </summary>
+    internal const int GlitchReleaseMs = 60;
+
+    /// <summary>
+    /// Окно созревания отпускания-глитча: если за это время кнопку нажали снова, оба события
+    /// отбрасываются и запись продолжается.
+    /// </summary>
+    internal const int GlitchGraceMs = 250;
+
     /// <summary>Нажатие короче этого — «короткий тап»: не ошибка, капсулу скрываем тихо.</summary>
     internal const int ShortTapMs = 180;
 
@@ -76,6 +88,10 @@ internal sealed class ButtonDebounce
     private bool _releasePending;
     private long _pressTimestamp;
     private long _releaseTimestamp;
+    private int _releaseWindowMs = PushToTalkTiming.ReleaseDebounceMs;
+
+    /// <summary>Сколько мс отпускание должно прожить без повторного нажатия (зависит от момента Up).</summary>
+    internal int ReleaseWindowMs => _releaseWindowMs;
 
     internal bool IsHeld => _held;
     internal bool ReleasePending => _releasePending;
@@ -86,7 +102,7 @@ internal sealed class ButtonDebounce
     {
         if (_held && _releasePending)
         {
-            if (PushToTalkTiming.ElapsedMs(_releaseTimestamp, timestamp) < PushToTalkTiming.ReleaseDebounceMs)
+            if (PushToTalkTiming.ElapsedMs(_releaseTimestamp, timestamp) < _releaseWindowMs)
             {
                 _releasePending = false;
                 return DebounceDownResult.Bounce;
@@ -117,6 +133,9 @@ internal sealed class ButtonDebounce
 
         _releasePending = true;
         _releaseTimestamp = timestamp;
+        _releaseWindowMs = PushToTalkTiming.ElapsedMs(_pressTimestamp, timestamp) < PushToTalkTiming.GlitchReleaseMs
+            ? PushToTalkTiming.GlitchGraceMs
+            : PushToTalkTiming.ReleaseDebounceMs;
         return true;
     }
 
@@ -125,7 +144,7 @@ internal sealed class ButtonDebounce
     {
         args = null!;
         if (!_held || !_releasePending ||
-            PushToTalkTiming.ElapsedMs(_releaseTimestamp, now) < PushToTalkTiming.ReleaseDebounceMs)
+            PushToTalkTiming.ElapsedMs(_releaseTimestamp, now) < _releaseWindowMs)
         {
             return false;
         }
@@ -174,7 +193,10 @@ internal sealed class PushToTalkEventTrace
 
     internal int Count => _count;
 
-    /// <param name="kind">'D' нажатие, 'U' отпускание, 'B' подавленный дребезг, 'R' автоповтор.</param>
+    /// <param name="kind">
+    /// 'D' нажатие, 'U' отпускание, 'B' подавленный дребезг, 'R' автоповтор; строчные 'd'/'u' —
+    /// синтетическое событие (LLMHF_INJECTED), которое послало ПО, а не железо.
+    /// </param>
     internal void Add(long timestamp, char kind)
     {
         _ring[_next] = (timestamp, kind);
@@ -212,5 +234,64 @@ internal sealed class PushToTalkEventTrace
     {
         _next = 0;
         _count = 0;
+    }
+}
+
+/// <summary>Что сторож хука делает по итогам окна.</summary>
+internal enum WatchdogVerdict
+{
+    /// <summary>Хук жив или курсор не двигался: ничего не делаем.</summary>
+    Healthy,
+
+    /// <summary>Курсор сдвинут программно (SetCursorPos и т. п.): хук тут ни при чём.</summary>
+    Synthetic,
+
+    /// <summary>Кнопка удерживается, подозрение первое: ждём подтверждения следующим окном.</summary>
+    Wait,
+
+    /// <summary>Хук подозрителен: переустановить.</summary>
+    Reinstall
+}
+
+/// <param name="Verdict">Итог окна.</param>
+/// <param name="NewStreak">Новое значение счётчика подозрительных окон подряд.</param>
+/// <param name="ReleaseHeld">Принудительно отпустить удерживаемую кнопку (хук реально снят системой).</param>
+internal readonly record struct WatchdogDecision(WatchdogVerdict Verdict, int NewStreak, bool ReleaseHeld)
+{
+    internal bool Reinstall => Verdict == WatchdogVerdict.Reinstall;
+}
+
+/// <summary>Чистое решение сторожа хука: без WinAPI и состояния, чтобы его можно было проверить тестами.</summary>
+internal static class HookWatchdog
+{
+    /// <summary>Win32-ошибка UnhookWindowsHookEx для уже снятого системой хука.</summary>
+    internal const int ErrorInvalidHookHandle = 1404;
+
+    /// <param name="streak">Подозрительные окна подряд, включая текущее.</param>
+    /// <param name="oldHookInvalid">
+    /// UnhookWindowsHookEx(старый хук) вернул 1404, то есть хук реально снят системой. До переустановки
+    /// это неизвестно — передаётся false, и отпускание решается повторным вызовом после неё.
+    /// </param>
+    internal static WatchdogDecision Evaluate(
+        bool cursorMoved, bool hookSeenInWindow, bool realInput, bool held, int streak, bool oldHookInvalid)
+    {
+        if (!cursorMoved || hookSeenInWindow)
+        {
+            return new WatchdogDecision(WatchdogVerdict.Healthy, 0, false);
+        }
+
+        if (!realInput)
+        {
+            return new WatchdogDecision(WatchdogVerdict.Synthetic, 0, false);
+        }
+
+        // Удерживаемую кнопку без подтверждения вторым окном не трогаем (streak < 2).
+        if (held && streak < 2)
+        {
+            return new WatchdogDecision(WatchdogVerdict.Wait, streak, false);
+        }
+
+        // Отпускаем, только если и окон было два, и система подтвердила, что старый хук снят.
+        return new WatchdogDecision(WatchdogVerdict.Reinstall, 0, held && streak >= 2 && oldHookInvalid);
     }
 }

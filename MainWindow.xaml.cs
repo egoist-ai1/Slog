@@ -554,19 +554,49 @@ public partial class MainWindow : Window, IDisposable
     private void BeginPushToTalk(PushToTalkSource source, long pressTimestamp)
     {
         // Нажатие во время распознавания прошлой фразы разрешено: у каждой записи свой TakeContext.
-        if (_disposed || _isChangingCapture || _isCancellingCapture || CurrentAudioCaptureState.IsUserPaused) return;
-        if (_pushToTalk.Press(source) && CanStartRecording)
+        if (_disposed || _isChangingCapture || _isCancellingCapture || CurrentAudioCaptureState.IsUserPaused)
         {
-            var press = pressTimestamp != 0 ? pressTimestamp : Stopwatch.GetTimestamp();
-            // Хвост прежней записи ещё пишется или её старт ждёт в очереди: обрезаем его по нажатию
-            // сразу, минуя очередь, иначе начало новой фразы уйдёт в старую запись.
-            if (_activeTakes.Any(take => !take.CaptureReleased.Task.IsCompleted))
-            {
-                try { _audioCapture.CapTail(press); }
-                catch (Exception exception) { AppLog.Write("CapTail failed", exception); }
-            }
-            _ = StartRecordingAsync(press);
+            LogPushToTalkDropped(source, "capture busy or paused");
+            return;
         }
+        if (!_pushToTalk.Press(source))
+        {
+            LogPushToTalkDropped(source, "coordinator rejected the press");
+            return;
+        }
+        if (!CanStartRecording)
+        {
+            LogPushToTalkDropped(source, "cannot start recording");
+            return;
+        }
+
+        var press = pressTimestamp != 0 ? pressTimestamp : Stopwatch.GetTimestamp();
+        // Хвост прежней записи ещё пишется или её старт ждёт в очереди: обрезаем его по нажатию
+        // сразу, минуя очередь, иначе начало новой фразы уйдёт в старую запись.
+        if (_activeTakes.Any(take => !take.CaptureReleased.Task.IsCompleted))
+        {
+            try { _audioCapture.CapTail(press); }
+            catch (Exception exception) { AppLog.Write("CapTail failed", exception); }
+        }
+        _ = StartRecordingAsync(press);
+    }
+
+    private long _lastPushDropLogTimestamp;
+
+    /// <summary>Причина отброшенного нажатия: только флаги и числа, не чаще раза в секунду.</summary>
+    private void LogPushToTalkDropped(PushToTalkSource source, string reason)
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (_lastPushDropLogTimestamp != 0 && PushToTalkTiming.ElapsedMs(_lastPushDropLogTimestamp, now) < 1000)
+        {
+            return;
+        }
+
+        _lastPushDropLogTimestamp = now;
+        AppLog.Write($"push-to-talk press dropped ({source}): {reason}; disposed={_disposed}, " +
+                     $"changing={_isChangingCapture}, cancelling={_isCancellingCapture}, " +
+                     $"paused={CurrentAudioCaptureState.IsUserPaused}, " +
+                     $"heldTakes={_activeTakes.Count(take => take.IsHeld)}, activeTakes={_activeTakes.Count}");
     }
 
     private void OnAudioCaptureStateChanged(object? sender, AudioCaptureStateChangedEventArgs change)

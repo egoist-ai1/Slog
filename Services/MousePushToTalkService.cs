@@ -25,8 +25,11 @@ public sealed class MousePushToTalkService : IDisposable
     private const int WmUser = 0x0400;
     private const uint PmNoRemove = 0x0000;
     private const uint WatchdogIntervalMs = 3_000;
-    // Зрелость отпускания проверяется чуть позже порога дребезга, чтобы таймер не сработал раньше.
-    private const uint ReleaseCommitDelayMs = PushToTalkTiming.ReleaseDebounceMs + 10;
+    // Зрелость отпускания проверяется чуть позже окна дребезга, чтобы таймер не сработал раньше.
+    private const int ReleaseCommitMarginMs = 10;
+    // Доставка события хука дольше этого — задержка в системе, а не в нашем колбэке.
+    private const long DeliveryLagLogMs = 50;
+    private const uint LlmhfInjected = 1;
 
     /// <summary>Windows drops a hook whose callback exceeds LowLevelHooksTimeout (300 ms by default).</summary>
     private const long CallbackBudgetMicroseconds = 1_000;
@@ -46,10 +49,12 @@ public sealed class MousePushToTalkService : IDisposable
     private readonly PushToTalkEventTrace _trace = new();
     private bool _traceRequested;
     private int _suspectStreak;
+    private int _reinstallStreak;
     private long _syntheticMoves;
     private long _lastHookTick;
     private long _watchdogWindowStart;
     private long _worstCallbackMicroseconds;
+    private long _worstDeliveryLagMs;
     private Point _lastWatchdogCursor;
     // True from a swallowed button-down until its matching button-up, so the pair is never split.
     private bool _swallowUp;
@@ -110,6 +115,7 @@ public sealed class MousePushToTalkService : IDisposable
 
             _foreground = new ForegroundGameMonitor();
             _foreground.Start();
+            LogHookEnvironment();
             _lastHookTick = Environment.TickCount64;
             _watchdogWindowStart = _lastHookTick;
             GetCursorPos(out _lastWatchdogCursor);
@@ -213,9 +219,15 @@ public sealed class MousePushToTalkService : IDisposable
         }
 
         var worst = Interlocked.Exchange(ref _worstCallbackMicroseconds, 0);
+        var worstLag = Interlocked.Exchange(ref _worstDeliveryLagMs, 0);
         if (worst > CallbackBudgetMicroseconds)
         {
-            AppLog.Write($"{ButtonName} hook callback peaked at {worst / 1000d:0.00} ms in the last window");
+            AppLog.Write($"{ButtonName} hook callback peaked at {worst / 1000d:0.00} ms in the last window " +
+                         $"(worst delivery lag {worstLag} ms)");
+        }
+        if (worstLag > DeliveryLagLogMs)
+        {
+            AppLog.Write($"{ButtonName} hook event delivery lag peaked at {worstLag} ms in the last window");
         }
 
         FlushTrace("watchdog");
@@ -231,44 +243,30 @@ public sealed class MousePushToTalkService : IDisposable
         var previous = _lastWatchdogCursor;
         _lastWatchdogCursor = cursor;
         var cursorMoved = cursor.X != previous.X || cursor.Y != previous.Y;
-        if (!cursorMoved || Volatile.Read(ref _lastHookTick) >= windowStart)
-        {
-            _suspectStreak = 0;
-            return;
-        }
-
-        if (!HadRealInputSince(windowStart, now))
-        {
-            // Курсор сдвинут программно: хук тут ни при чём.
-            _syntheticMoves++;
-            _suspectStreak = 0;
-            return;
-        }
-
+        var hookSeen = Volatile.Read(ref _lastHookTick) >= windowStart;
+        // Опрос последнего ввода нужен только для подозрительного окна.
+        var realInput = cursorMoved && !hookSeen && HadRealInputSince(windowStart, now);
         var held = _debounce.IsHeld;
-        _suspectStreak++;
-        if (held && _suspectStreak < 2)
+        var streak = _suspectStreak + 1;
+        var decision = HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, false);
+        switch (decision.Verdict)
         {
-            return; // держим: ждём подтверждения следующим окном, не рискуем ложным отпусканием
+            case WatchdogVerdict.Healthy:
+                _suspectStreak = 0;
+                _reinstallStreak = 0;
+                return;
+            case WatchdogVerdict.Synthetic:
+                // Курсор сдвинут программно: хук тут ни при чём.
+                _syntheticMoves++;
+                _suspectStreak = 0;
+                return;
+            case WatchdogVerdict.Wait:
+                // Держим: ждём подтверждения следующим окном (_suspectStreak < 2), не рискуем ложным отпусканием.
+                _suspectStreak = decision.NewStreak;
+                return;
         }
 
-        AppLog.Write($"{ButtonName} hook stopped receiving events (input without hook events, " +
-                     $"synthetic cursor moves ignored so far: {_syntheticMoves}); reinstalling");
-        FlushTrace("hook-suspect");
         _suspectStreak = 0;
-
-        // Потерянное отпускание: кнопку отпустили, пока хук был снят. Защита от ложного отпускания
-        // здесь одна — подтверждение в двух окнах подряд (_suspectStreak выше).
-        if (held)
-        {
-            AppLog.Write($"{ButtonName} was still held when the hook died; releasing");
-            CancelReleaseTimer();
-            if (_debounce.ForceRelease(Stopwatch.GetTimestamp(), out var args))
-            {
-                _swallowUp = false;
-                FinishRelease(args);
-            }
-        }
 
         // Новый хук ставится до снятия старого, чтобы не было окна без хука.
         var replacement = SetWindowsHookEx(WhMouseLl, _callback!, GetModuleHandle(null), 0);
@@ -280,12 +278,66 @@ public sealed class MousePushToTalkService : IDisposable
 
         var old = _hook;
         _hook = replacement;
+        var unhookResult = "no old hook";
+        var oldHookInvalid = false;
         if (old != 0)
         {
-            UnhookWindowsHookEx(old);
+            var unhooked = UnhookWindowsHookEx(old);
+            var error = Marshal.GetLastWin32Error();
+            oldHookInvalid = !unhooked && error == HookWatchdog.ErrorInvalidHookHandle;
+            unhookResult = unhooked ? "ok (old hook was alive)" : $"failed, Win32 error {error}";
         }
 
-        Volatile.Write(ref _lastHookTick, Environment.TickCount64);
+        _reinstallStreak++;
+        if (_reinstallStreak == 1 || _reinstallStreak % 10 == 0)
+        {
+            AppLog.Write($"{ButtonName} hook stopped receiving events (input without hook events, " +
+                         $"synthetic cursor moves ignored so far: {_syntheticMoves}); reinstalled, " +
+                         $"foreground={_foreground?.ForegroundProcessName}, unhook(old)={unhookResult}, " +
+                         $"reinstalls in a row={_reinstallStreak}");
+            FlushTrace("hook-suspect");
+        }
+
+        // Потерянное отпускание: кнопку отпустили, пока хук был снят. Отпускаем, только если система
+        // подтвердила, что старый хук снят (1404), и подозрительных окон подряд было два; живой хук —
+        // только лог.
+        if (!held)
+        {
+            return;
+        }
+
+        if (HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, oldHookInvalid).ReleaseHeld)
+        {
+            AppLog.Write($"{ButtonName} was still held when the hook died; releasing");
+            CancelReleaseTimer();
+            if (_debounce.ForceRelease(Stopwatch.GetTimestamp(), out var args))
+            {
+                _swallowUp = false;
+                FinishRelease(args);
+            }
+        }
+        else
+        {
+            AppLog.Write($"{ButtonName} is held and the old hook was not invalidated; keeping the press");
+        }
+    }
+
+    private void LogHookEnvironment()
+    {
+        try
+        {
+            var timeout = Microsoft.Win32.Registry.GetValue(
+                @"HKEY_CURRENT_USER\Control Panel\Desktop", "LowLevelHooksTimeout", null);
+            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+            var elevated = new System.Security.Principal.WindowsPrincipal(identity)
+                .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            AppLog.Write($"{ButtonName} hook environment: LowLevelHooksTimeout={timeout?.ToString() ?? "(not set)"}, " +
+                         $"elevated={elevated}");
+        }
+        catch (Exception exception)
+        {
+            AppLog.Write($"{ButtonName} hook environment unavailable", exception);
+        }
     }
 
     /// <summary>Было ли за окно настоящее действие пользователя (мышь или клавиатура).</summary>
@@ -330,7 +382,7 @@ public sealed class MousePushToTalkService : IDisposable
     {
         if (_releaseTimerId == 0)
         {
-            _releaseTimerId = SetTimer(0, 0, ReleaseCommitDelayMs, 0);
+            _releaseTimerId = SetTimer(0, 0, (uint)(_debounce.ReleaseWindowMs + ReleaseCommitMarginMs), 0);
         }
     }
 
@@ -369,14 +421,15 @@ public sealed class MousePushToTalkService : IDisposable
     /// Keeps the worst callback cost seen since the last watchdog tick. The acceptance criterion
     /// for this service is a sub-millisecond callback, and a criterion nobody measures is a wish.
     /// </summary>
-    private void RecordCallbackCost(TimeSpan elapsed)
+    private void RecordCallbackCost(TimeSpan elapsed) =>
+        RecordMax(ref _worstCallbackMicroseconds, (long)(elapsed.TotalMilliseconds * 1000));
+
+    private static void RecordMax(ref long field, long value)
     {
-        var microseconds = (long)(elapsed.TotalMilliseconds * 1000);
-        var previous = Volatile.Read(ref _worstCallbackMicroseconds);
-        while (microseconds > previous)
+        var previous = Volatile.Read(ref field);
+        while (value > previous)
         {
-            var exchanged = Interlocked.CompareExchange(
-                ref _worstCallbackMicroseconds, microseconds, previous);
+            var exchanged = Interlocked.CompareExchange(ref field, value, previous);
             if (exchanged == previous)
             {
                 return;
@@ -401,7 +454,12 @@ public sealed class MousePushToTalkService : IDisposable
                     // Отметка берётся первым делом: потребителю нужен момент нажатия, а не момент,
                     // когда UI дошёл до обработчика.
                     var timestamp = Stopwatch.GetTimestamp();
-                    swallow = message == WmXButtonDown ? HandleDown(timestamp) : HandleUp(timestamp);
+                    // Задержка доставки: сколько событие ждало в очереди системы до нашего колбэка.
+                    RecordMax(ref _worstDeliveryLagMs, unchecked((uint)Environment.TickCount - input.Time));
+                    var injected = (input.Flags & LlmhfInjected) != 0;
+                    swallow = message == WmXButtonDown
+                        ? HandleDown(timestamp, injected)
+                        : HandleUp(timestamp, injected);
                 }
             }
             catch
@@ -420,7 +478,7 @@ public sealed class MousePushToTalkService : IDisposable
         return CallNextHookEx(_hook, code, message, data);
     }
 
-    private bool HandleDown(long timestamp)
+    private bool HandleDown(long timestamp, bool injected)
     {
         // Созревшее, но не подтверждённое таймером отпускание фиксируем до разбора нового нажатия.
         if (_debounce.TryCommitRelease(timestamp, out var committed))
@@ -441,7 +499,7 @@ public sealed class MousePushToTalkService : IDisposable
         switch (_debounce.OnDown(timestamp))
         {
             case DebounceDownResult.Press:
-                _trace.Add(timestamp, 'D');
+                _trace.Add(timestamp, injected ? 'd' : 'D');
                 _swallowUp = true;
                 Raise(Pressed, new PushToTalkEventArgs(timestamp, 0));
                 return true;
@@ -458,11 +516,11 @@ public sealed class MousePushToTalkService : IDisposable
         }
     }
 
-    private bool HandleUp(long timestamp)
+    private bool HandleUp(long timestamp, bool injected)
     {
         if (_debounce.OnUp(timestamp))
         {
-            _trace.Add(timestamp, 'U');
+            _trace.Add(timestamp, injected ? 'u' : 'U');
             ArmReleaseTimer();
         }
 
