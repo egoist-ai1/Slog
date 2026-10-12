@@ -82,21 +82,6 @@
             </DoubleAnimationUsingKeyFrames>
         </Storyboard>
 
-        <Storyboard x:Key="ListenPulseStoryboard" RepeatBehavior="Forever" AutoReverse="True">
-            <DoubleAnimation Storyboard.TargetName="StateHalo" Storyboard.TargetProperty="Opacity"
-                             From="0.08" To="0.28" Duration="0:0:1.3">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="StateHaloScale" Storyboard.TargetProperty="ScaleX"
-                             From="0.94" To="1.08" Duration="0:0:1.3">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="StateHaloScale" Storyboard.TargetProperty="ScaleY"
-                             From="0.94" To="1.08" Duration="0:0:1.3">
-                <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
-
         <Storyboard x:Key="DownloadStoryboard" RepeatBehavior="Forever" AutoReverse="True">
             <DoubleAnimation Storyboard.TargetName="DownloadArrowOffset" Storyboard.TargetProperty="Y"
                              From="-0.8" To="0.8" Duration="0:0:0.62">
@@ -115,8 +100,6 @@
                              From="0.45" To="1" Duration="{StaticResource MotionDisc}">
                 <DoubleAnimation.EasingFunction><BackEase EasingMode="EaseOut" Amplitude="0.25" /></DoubleAnimation.EasingFunction>
             </DoubleAnimation>
-            <DoubleAnimation Storyboard.TargetName="SuccessFlash" Storyboard.TargetProperty="Opacity"
-                             From="0.28" To="0" Duration="0:0:0.35" EasingFunction="{StaticResource MotionEaseOut}" />
         </Storyboard>
 
         <!-- Появление: прозрачность 0→1 за 90 мс, масштаб 0,94→1, сдвиг по Y 6→0, ease-out. -->
@@ -129,15 +112,11 @@
                              From="6" To="0" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
                              From="0" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
-            <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="{StaticResource MotionEnter}" EasingFunction="{StaticResource MotionEaseOut}" />
         </Storyboard>
 
         <!-- «Уменьшить движение»: только прозрачность, 80 мс. -->
         <Storyboard x:Key="EnterReducedStoryboard">
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             From="0" To="1" Duration="{StaticResource MotionReduced}" />
-            <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
                              From="0" To="1" Duration="{StaticResource MotionReduced}" />
         </Storyboard>
 
@@ -151,14 +130,10 @@
                              To="4" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
                              To="0" Duration="{StaticResource MotionExit}" EasingFunction="{StaticResource MotionEaseIn}" />
-            <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="{StaticResource MotionExit}" />
         </Storyboard>
 
         <Storyboard x:Key="ExitReducedStoryboard">
             <DoubleAnimation Storyboard.TargetName="CapsuleShell" Storyboard.TargetProperty="Opacity"
-                             To="0" Duration="{StaticResource MotionReduced}" />
-            <DoubleAnimation Storyboard.TargetName="ShadowSurface" Storyboard.TargetProperty="Opacity"
                              To="0" Duration="{StaticResource MotionReduced}" />
         </Storyboard>
 
@@ -307,7 +282,6 @@
         <Grid x:Name="CapsuleBody" Width="256" Height="48"
               HorizontalAlignment="Center" VerticalAlignment="Center">
 
-            <Border x:Name="ShadowSurface" Visibility="Collapsed" IsHitTestVisible="False" />
 
             <controls:CapsuleStatusSurface x:Name="CapsuleShell" Opacity="1" RenderTransformOrigin="0.5,0.5"
                   AutomationProperties.Name="Слог"
@@ -355,30 +329,8 @@
                         </MenuItem>
                     </ContextMenu>
                 </controls:PixelPerfectCapsuleBorder.ContextMenu>
-                <controls:PixelPerfectCapsuleBorder.Triggers>
-                    <EventTrigger RoutedEvent="MouseEnter">
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="Opacity"
-                                                 To="1" Duration="{StaticResource MotionContent}" />
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </EventTrigger>
-                    <EventTrigger RoutedEvent="MouseLeave">
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetName="HoverSurface" Storyboard.TargetProperty="Opacity"
-                                                 To="0" Duration="{StaticResource MotionContent}" />
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </EventTrigger>
-                </controls:PixelPerfectCapsuleBorder.Triggers>
 
                 <Grid Margin="8,0">
-                    <Border x:Name="SurfaceGradient" Visibility="Collapsed" IsHitTestVisible="False" />
-                    <Border x:Name="InnerSpecularBorder" Visibility="Collapsed" IsHitTestVisible="False" />
-                    <Border x:Name="HoverSurface" Visibility="Collapsed" IsHitTestVisible="False" />
-                    <Border x:Name="SuccessFlash" Visibility="Collapsed" IsHitTestVisible="False" />
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -391,9 +343,6 @@
                         </Grid.ColumnDefinitions>
 
                         <Grid Grid.Column="0" Width="32" Height="32">
-                            <Ellipse x:Name="StateHalo" Visibility="Collapsed" IsHitTestVisible="False">
-                                <Ellipse.RenderTransform><ScaleTransform x:Name="StateHaloScale" /></Ellipse.RenderTransform>
-                            </Ellipse>
                             <Ellipse x:Name="StartRing" Stroke="#A8FF00" StrokeThickness="1.5" Opacity="0"
                                      IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
                                 <Ellipse.RenderTransform><ScaleTransform x:Name="StartRingScale" /></Ellipse.RenderTransform>
