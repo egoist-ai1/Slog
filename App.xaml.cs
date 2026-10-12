@@ -37,6 +37,8 @@ public partial class App : System.Windows.Application
         // Core has no reference to the service layer, so the logging hook is wired here rather
         // than taken as a dependency.
         Core.UserDictionary.AppLogWrite = message => AppLog.Write(message);
+        // Трей-процесс иначе может попасть в EcoQoS и медленно отвечать на первую диктовку.
+        Services.ProcessPowerPolicy.DisableThrottling();
         // CLI arguments often contain corpus/audio/output paths. Logging their values would turn a
         // local benchmark into a path-disclosure channel, so diagnostics keep only the mode/count.
         AppLog.Write($"Startup mode={(e.Args.FirstOrDefault() ?? "interactive")} argCount={e.Args.Length}");
