@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using Egoist.Voice.Controls;
 using Egoist.Voice.Core;
 using Egoist.Voice.Services;
 
@@ -694,15 +695,13 @@ public partial class SettingsWindow : Window
         _pageTransitionOffset = offset;
         content.RenderTransform = offset;
         content.Opacity = 0;
-        var easing = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-        content.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140))
-        {
-            EasingFunction = easing
-        });
-        offset.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(160))
-        {
-            EasingFunction = easing
-        });
+        var easing = Motion.QuadraticEaseOut();
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(140)) { EasingFunction = easing };
+        var slide = new DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(160)) { EasingFunction = easing };
+        Timeline.SetDesiredFrameRate(fade, _mainWindow.MotionFrameRate);
+        Timeline.SetDesiredFrameRate(slide, _mainWindow.MotionFrameRate);
+        content.BeginAnimation(OpacityProperty, fade);
+        offset.BeginAnimation(TranslateTransform.YProperty, slide);
     }
 
     private void UpdateAppearanceStatus()

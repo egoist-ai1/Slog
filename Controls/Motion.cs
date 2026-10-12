@@ -30,13 +30,22 @@ internal static class Motion
     internal static int ResolveFrameRate(int refreshHz) =>
         refreshHz <= 1 ? FallbackFrameRate : Math.Clamp(refreshHz, 30, MaxFrameRate);
 
-    internal static IEasingFunction EaseOut() => Frozen(EasingMode.EaseOut);
+    // Замороженные кривые создаются один раз: анимации в коде не должны на каждый вызов плодить Ease.
+    private static readonly IEasingFunction CubicOut = Frozen(new CubicEase { EasingMode = EasingMode.EaseOut });
+    private static readonly IEasingFunction CubicInOut = Frozen(new CubicEase { EasingMode = EasingMode.EaseInOut });
+    private static readonly IEasingFunction QuinticOut = Frozen(new QuinticEase { EasingMode = EasingMode.EaseOut });
+    private static readonly IEasingFunction QuadraticOut = Frozen(new QuadraticEase { EasingMode = EasingMode.EaseOut });
 
-    internal static IEasingFunction EaseInOut() => Frozen(EasingMode.EaseInOut);
+    internal static IEasingFunction EaseOut() => CubicOut;
 
-    private static CubicEase Frozen(EasingMode mode)
+    internal static IEasingFunction EaseInOut() => CubicInOut;
+
+    internal static IEasingFunction QuinticEaseOut() => QuinticOut;
+
+    internal static IEasingFunction QuadraticEaseOut() => QuadraticOut;
+
+    private static IEasingFunction Frozen(EasingFunctionBase ease)
     {
-        var ease = new CubicEase { EasingMode = mode };
         ease.Freeze();
         return ease;
     }

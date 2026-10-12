@@ -684,9 +684,10 @@ public partial class MainWindow
             var spring = new DoubleAnimationUsingKeyFrames { FillBehavior = FillBehavior.HoldEnd };
             spring.KeyFrames.Add(new LinearDoubleKeyFrame(currentWidth, KeyTime.FromTimeSpan(TimeSpan.Zero)));
             spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth * 1.02,
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(110)), new CubicEase { EasingMode = EasingMode.EaseOut }));
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(110)), Motion.EaseOut()));
             spring.KeyFrames.Add(new EasingDoubleKeyFrame(targetWidth,
-                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), new CubicEase { EasingMode = EasingMode.EaseInOut }));
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(160)), Motion.EaseInOut()));
+            Timeline.SetDesiredFrameRate(spring, _motionFrameRate);
             CapsuleBody.BeginAnimation(FrameworkElement.WidthProperty, spring, HandoffBehavior.SnapshotAndReplace);
             return;
         }
@@ -696,9 +697,10 @@ public partial class MainWindow
             From = currentWidth,
             To = targetWidth,
             Duration = TimeSpan.FromMilliseconds(210),
-            EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = Motion.QuinticEaseOut(),
             FillBehavior = FillBehavior.HoldEnd
         };
+        Timeline.SetDesiredFrameRate(animation, _motionFrameRate);
         CapsuleBody.BeginAnimation(
             FrameworkElement.WidthProperty,
             animation,

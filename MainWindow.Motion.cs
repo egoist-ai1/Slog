@@ -13,6 +13,9 @@ public partial class MainWindow
     private const int WmDisplayChange = 0x007E;
     private int _motionFrameRate = Motion.FallbackFrameRate;
     private int _displayRefreshHz;
+
+    /// <summary>Такт для анимаций, созданных в коде (окно настроек).</summary>
+    internal int MotionFrameRate => _motionFrameRate;
     private FrameIntervalStats? _frameStats;
     private EventHandler? _frameStatsHandler;
 
