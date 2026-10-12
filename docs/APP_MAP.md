@@ -39,18 +39,9 @@ Bounded text repairs support catalogue-backed Russian-name/preposition joins and
   ambiguities. `UserDictionary` preserves user-last precedence and regex limits.
 - `Services/TranslatorClient.cs` owns the pinned named-pipe adapter, shared Host
   discovery/start without ownership, target-tier mapping and typed failures.
-- `installer/EgoistVoice.iss` and `scripts/build-installer.ps1` consume the
-  exact Full Offline Engine bundle, install owner-last and emit a receipt-bound
-  one-file setup. `installer/EgoistVoiceBootstrap.cs` owns bounded extraction,
-  embedded hash verification, inner setup exit propagation and cleanup;
-  `New-/Test-EgoistVoiceSingleFile.ps1` own package creation and independent
-  validation. Voice uninstall owns only `egoist-voice.owner.json`; shared Host,
-  model and other product owners remain outside its scope.
-- `installer/EgoistVoiceWebBootstrap*.cs` owns public web/offline delivery;
-  `Export-/Build-/Test-EgoistVoiceWebInstaller.ps1` own exact payload extraction,
-  PE/receipt/checksum generation and the local download/resume/hash regression
-  fixture. Release assets remain outside Git and are uploaded from
-  `artifacts/release/github-<tag>/`.
+- `installer/EgoistVoiceCompact.iss` and `scripts/Build-CompactInstaller.ps1` build the current
+  Compact setup; `installer/EgoistVoiceBootstrap.cs` with `New-/Test-EgoistVoiceSingleFile.ps1`
+  (used by `Build-RussianInstaller.ps1`) own bounded extraction and embedded hash verification.
 - `tests/Egoist.Voice.Tests/` owns source contracts; `tests/corpus/` describes private benchmark workflow.
 - `scripts/` owns installer, release smoke, visual capture and operational helpers.
 - `docs/HANDOFF-2.1.1.md` is the current predecessor to `STATUS.md`; historical detail remains linked, not copied.

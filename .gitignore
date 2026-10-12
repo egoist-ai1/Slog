@@ -14,8 +14,6 @@ __pycache__/
 artifacts/
 build/
 installer/*.generated.iss
-installer/react/node_modules/
-installer/react/dist/
 *.exe
 
 # Корпус — это голос пользователя, он не коммитится. Инструкции и схема остаются
