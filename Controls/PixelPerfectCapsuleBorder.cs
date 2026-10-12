@@ -34,7 +34,10 @@ public sealed class PixelPerfectCapsuleBorder : Decorator
     public int RasterScale { get => (int)GetValue(RasterScaleProperty); set => SetValue(RasterScaleProperty, value); }
 
     private CacheKey _cacheKey;
-    private BitmapSource? _cachedChrome;
+    private CroppedBitmap? _leftCap;
+    private CroppedBitmap? _middle;
+    private CroppedBitmap? _rightCap;
+    private int _capPixels;
 
     public PixelPerfectCapsuleBorder()
     {
@@ -54,14 +57,25 @@ public sealed class PixelPerfectCapsuleBorder : Decorator
         }
 
         var dpi = VisualTreeHelper.GetDpi(this);
+        var scaleX = Math.Max(1, dpi.DpiScaleX);
+        var capPixels = (int)Math.Ceiling(Math.Max(0, CornerRadius) * scaleX);
+        var widthPixels = (int)Math.Round(ActualWidth * scaleX);
 
-        // Rasterizing on every OnRender was the single most expensive thing the capsule did. At
-        // 150 % DPI and RasterScale 4 the chrome bitmap alone is about 1.5 MB, and OnRender fires
-        // for every frame of the width animation — tens of megabytes per state change, part of it
-        // straight into the large object heap. The geometry only actually changes when the size,
-        // the DPI or one of the brushes does.
+        // Width is deliberately NOT part of the cache key. The capsule animates its width for
+        // 160-210 ms, and rasterizing a 4x chrome bitmap (about 1.7 MB, large object heap) on every
+        // frame of that animation was the most expensive thing it did. Instead the chrome is
+        // rasterized once at a canonical width into three slices: two rounded end caps and one
+        // device-pixel-wide column of the straight middle, which is stretched to any width. The
+        // curve on the caps keeps its 4x supersampled accuracy; the middle is uniform horizontally,
+        // so stretching it loses nothing. All slice edges sit on whole device pixels (no seams).
+        // Only a capsule narrower than two caps falls back to a full-width raster.
+        if (widthPixels < 2 * capPixels + 1 || capPixels < 1)
+        {
+            DrawFullWidth(drawingContext, dpi);
+            return;
+        }
+
         var key = new CacheKey(
-            ActualWidth,
             ActualHeight,
             dpi.DpiScaleX,
             dpi.DpiScaleY,
@@ -71,21 +85,55 @@ public sealed class PixelPerfectCapsuleBorder : Decorator
             Background,
             PhysicalStroke > 0 ? BorderBrush : System.Windows.Media.Brushes.Transparent);
 
-        if (_cachedChrome is null || !_cacheKey.Equals(key))
+        if (_leftCap is null || !_cacheKey.Equals(key))
         {
-            _cachedChrome = RasterizeChrome(dpi);
+            RasterizeSlices(dpi, capPixels);
             _cacheKey = key;
             RasterizationCount++;
         }
 
-        drawingContext.DrawImage(_cachedChrome, new Rect(0, 0, ActualWidth, ActualHeight));
+        var capWidth = _capPixels / scaleX;
+        var rightStart = (widthPixels - _capPixels) / scaleX;
+        drawingContext.DrawImage(_leftCap!, new Rect(0, 0, capWidth, ActualHeight));
+        if (rightStart > capWidth)
+        {
+            drawingContext.DrawImage(_middle!, new Rect(capWidth, 0, rightStart - capWidth, ActualHeight));
+        }
+
+        drawingContext.DrawImage(_rightCap!, new Rect(rightStart, 0, capWidth, ActualHeight));
     }
 
-    private BitmapSource RasterizeChrome(DpiScale dpi)
+    private void DrawFullWidth(DrawingContext drawingContext, DpiScale dpi)
     {
+        _leftCap = null;
+        drawingContext.DrawImage(RasterizeChrome(dpi, ActualWidth), new Rect(0, 0, ActualWidth, ActualHeight));
+        RasterizationCount++;
+    }
+
+    private void RasterizeSlices(DpiScale dpi, int capPixels)
+    {
+        var scaleX = Math.Max(1, dpi.DpiScaleX);
+        var rasterScale = Math.Clamp(RasterScale, 1, 8);
+        // Canonical width: two caps plus one device-pixel column of straight middle.
+        var canonicalWidth = (2 * capPixels + 1) / scaleX;
+        var bitmap = RasterizeChrome(dpi, canonicalWidth);
+        var capRaster = capPixels * rasterScale;
+        var height = bitmap.PixelHeight;
+        _leftCap = new CroppedBitmap(bitmap, new Int32Rect(0, 0, capRaster, height));
+        _middle = new CroppedBitmap(bitmap, new Int32Rect(capRaster, 0, rasterScale, height));
+        _rightCap = new CroppedBitmap(bitmap, new Int32Rect(capRaster + rasterScale, 0, capRaster, height));
+        _leftCap.Freeze();
+        _middle.Freeze();
+        _rightCap.Freeze();
+        _capPixels = capPixels;
+    }
+
+    private BitmapSource RasterizeChrome(DpiScale dpi, double width)
+    {
+        var height = ActualHeight;
         var profile = CalculateRasterProfile(
-            ActualWidth,
-            ActualHeight,
+            width,
+            height,
             dpi.DpiScaleX,
             dpi.DpiScaleY,
             PhysicalStroke,
@@ -95,7 +143,7 @@ public sealed class PixelPerfectCapsuleBorder : Decorator
         var stroke = profile.StrokeDip;
         var rasterScale = profile.RasterScale;
         var inset = stroke / 2;
-        var rect = new Rect(inset, inset, Math.Max(0, ActualWidth - stroke), Math.Max(0, ActualHeight - stroke));
+        var rect = new Rect(inset, inset, Math.Max(0, width - stroke), Math.Max(0, height - stroke));
         var radius = Math.Max(0, CornerRadius - inset);
         var pen = new System.Windows.Media.Pen(BorderBrush, stroke);
         if (pen.CanFreeze)
@@ -136,12 +184,11 @@ public sealed class PixelPerfectCapsuleBorder : Decorator
     }
 
     /// <summary>
-    /// Everything the rasterized chrome depends on. Brushes are compared by reference, which is
-    /// exactly right here: the capsule swaps between a handful of frozen static brushes, so a
-    /// reference change is a real change and equality never gives a false cache hit.
+    /// Everything the rasterized slices depend on (width is not among them). Brushes are compared
+    /// by reference, which is exactly right here: the capsule swaps between a handful of frozen
+    /// static brushes, so a reference change is a real change and equality never gives a false hit.
     /// </summary>
     private readonly record struct CacheKey(
-        double Width,
         double Height,
         double DpiScaleX,
         double DpiScaleY,
