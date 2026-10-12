@@ -1,4 +1,5 @@
 using Egoist.Voice.Services;
+using Egoist.Voice.Core;
 
 namespace Egoist.Voice.Tests;
 
@@ -43,7 +44,83 @@ public sealed class RussianSpeechQualityTests
         var formatter = new FakeEngine("Продолжение следует.");
         using var service = new RussianSpeechQualityService(primary, formatter);
         var result = await service.TranscribeSamplesAsync(Samples(), 16_000, CancellationToken.None);
-        Assert.Equal("", result.Text); Assert.Equal(0, formatter.DecodeCalls);
+        Assert.Equal("", result.Text);
+    }
+
+    [Fact]
+    public async Task Empty_primary_still_observes_a_failing_formatter_without_disabling_it()
+    {
+        var primary = new FakeEngine("");
+        var formatter = new FakeEngine("x") { DecodeFailure = new InvalidOperationException("unused result") };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        var result = await service.TranscribeSamplesAsync(Samples(), 16_000, CancellationToken.None);
+        Assert.Equal("", result.Text);
+        Assert.Equal(1, formatter.DecodeCalls);
+        Assert.True(service.FormattingAvailable);
+    }
+
+    [Fact]
+    public async Task Both_engines_decode_the_same_chunk_concurrently()
+    {
+        var primaryIn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var formatterIn = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var primary = new FakeEngine("мой друг как дела")
+        {
+            BeforeDecode = async _ => { primaryIn.SetResult(); await formatterIn.Task; }
+        };
+        var formatter = new FakeEngine("Мой друг, как дела?")
+        {
+            BeforeDecode = async _ => { formatterIn.SetResult(); await primaryIn.Task; }
+        };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        // Each decode waits for the other to start: this only completes when they overlap.
+        var result = await service.TranscribeSamplesAsync(Samples(), 16_000, CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal("Мой друг, как дела?", result.Text);
+    }
+
+    [Fact]
+    public async Task Parallel_result_equals_the_sequential_composition()
+    {
+        var primary = new FakeEngine("открой гитхаб");
+        var formatter = new FakeEngine("Открой GitHub.");
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        var result = await service.TranscribeSamplesAsync(Samples(), 16_000, CancellationToken.None);
+        var expected = AudioConfirmedNameFormatter.Apply(
+            AudioTranscriptComposer.Compose("открой гитхаб", "Открой GitHub."), "Открой GitHub.");
+        Assert.Equal(expected, result.Text);
+    }
+
+    [Fact]
+    public async Task Failing_formatter_is_observed_when_primary_also_fails()
+    {
+        var primary = new FakeEngine("слова") { DecodeFailure = new InvalidOperationException("primary") };
+        var formatter = new FakeEngine("Слова.") { DecodeFailure = new InvalidOperationException("formatter") };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.TranscribeSamplesAsync(Samples(), 16_000, CancellationToken.None));
+        Assert.Equal("primary", error.Message);
+        Assert.Equal(1, formatter.DecodeCalls);
+    }
+
+    [Fact]
+    public async Task Cancellation_reaches_both_concurrent_engines()
+    {
+        using var cancel = new CancellationTokenSource();
+        var started = 0;
+        var both = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Func<int, Task> gate = async _ =>
+        {
+            if (Interlocked.Increment(ref started) == 2) both.SetResult();
+            await Task.Delay(Timeout.Infinite, cancel.Token);
+        };
+        var primary = new FakeEngine("слова") { BeforeDecode = gate };
+        var formatter = new FakeEngine("Слова.") { BeforeDecode = gate };
+        using var service = new RussianSpeechQualityService(primary, formatter);
+        var request = service.TranscribeSamplesAsync(Samples(), 16_000, cancel.Token);
+        await both.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancel.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     [Fact]

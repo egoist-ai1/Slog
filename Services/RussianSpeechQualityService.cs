@@ -150,16 +150,34 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
     private async Task<string> DecodeChunkAsync(float[] samples, bool format, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var primary = await ((ISampleTranscriptionService)_primary)
-            .TranscribeSamplesAsync(samples, 16_000, cancellationToken).ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (!format || !_formattingReady || string.IsNullOrWhiteSpace(primary.Text))
-            return primary.Text;
+        // The formatter decodes the same samples concurrently with the primary engine: each engine
+        // serializes on its own decode lock, so only wall-clock time changes, not the result.
+        var primaryTask = ((ISampleTranscriptionService)_primary)
+            .TranscribeSamplesAsync(samples, 16_000, cancellationToken);
+        var formatterTask = format && _formattingReady
+            ? ((ISampleTranscriptionService)_formatter).TranscribeSamplesAsync(samples, 16_000, cancellationToken)
+            : null;
+        TranscriptionResult primary;
         try
         {
-            var secondary = await ((ISampleTranscriptionService)_formatter)
-                .TranscribeSamplesAsync(samples, 16_000, cancellationToken).ConfigureAwait(false);
+            primary = await primaryTask.ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            ObjectDisposedException.ThrowIf(_disposed, this);
+        }
+        catch
+        {
+            if (formatterTask is not null) await ObserveAsync(formatterTask).ConfigureAwait(false);
+            throw;
+        }
+        if (formatterTask is null) return primary.Text;
+        if (string.IsNullOrWhiteSpace(primary.Text))
+        {
+            await ObserveAsync(formatterTask).ConfigureAwait(false);
+            return primary.Text;
+        }
+        try
+        {
+            var secondary = await formatterTask.ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             ObjectDisposedException.ThrowIf(_disposed, this);
             var composed = AudioTranscriptComposer.Compose(primary.Text, secondary.Text);
@@ -172,6 +190,13 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
             AppLog.Write("Audio punctuation failed; preserving the primary transcript", exception);
             return primary.Text;
         }
+    }
+
+    /// <summary>Waits for a result that will not be used so its exception is never left unobserved.</summary>
+    private static async Task ObserveAsync(Task task)
+    {
+        try { await task.ConfigureAwait(false); }
+        catch { }
     }
 
     private TranscriptionResult CreateResult(string text, TimeSpan elapsed, bool format) =>
