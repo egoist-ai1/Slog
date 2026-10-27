@@ -401,7 +401,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid>
+    <Grid SizeChanged="RootGrid_OnSizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="32" />
             <RowDefinition Height="*" />
@@ -417,7 +417,7 @@
         </Grid>
 
         <Viewbox x:Name="ContentViewport" Grid.Row="1" Stretch="Uniform" StretchDirection="DownOnly"
-                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch" SizeChanged="ContentViewport_OnSizeChanged">
+                 HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
         <Grid x:Name="SettingsContent" Margin="24,18,24,22">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -458,6 +458,7 @@
                     <Border Padding="18,2,0,0">
                         <StackPanel>
                             <Border Style="{StaticResource Card}">
+                                <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -477,32 +478,101 @@
                                                 AutomationProperties.Name="Начать диктовку" />
                                     </StackPanel>
                                 </Grid>
+                                <ItemsControl x:Name="ReadinessItems" Margin="0,10,0,0" Focusable="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0" Padding="0,7">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <Ellipse x:Name="StatusDot" Width="8" Height="8" Margin="0,0,14,0"
+                                                             VerticalAlignment="Center" Fill="{DynamicResource AppSuccessBrush}" />
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0">
+                                                        <TextBlock x:Name="RowTitle" Text="{Binding Title}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Hint}" />
+                                                    </StackPanel>
+                                                    <Button Grid.Column="2" Content="{Binding ActionText}" Tag="{Binding Id}"
+                                                            Visibility="{Binding ActionVisibility}"
+                                                            Style="{StaticResource CompactButton}" Margin="0"
+                                                            Click="ReadinessAction_OnClick"
+                                                            AutomationProperties.Name="{Binding ActionAutomationName}" />
+                                                    <TextBlock Grid.Column="2" Text="В порядке" Style="{StaticResource Hint}"
+                                                               Visibility="{Binding OkVisibility}" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </Border>
+                                            <DataTemplate.Triggers>
+                                                <DataTrigger Binding="{Binding IsNeutral}" Value="True">
+                                                    <Setter TargetName="StatusDot" Property="Fill" Value="{DynamicResource AppTextDisabledBrush}" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsProblem}" Value="True">
+                                                    <Setter TargetName="StatusDot" Property="Fill" Value="{DynamicResource AppWarningBrush}" />
+                                                    <Setter TargetName="RowTitle" Property="Foreground" Value="{DynamicResource AppWarningBrush}" />
+                                                </DataTrigger>
+                                            </DataTemplate.Triggers>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Border x:Name="ActivationEditor" Visibility="Collapsed"
+                                        BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0">
+                                    <StackPanel>
+                                        <TextBlock Text="Выберите привычный способ. Своя клавиша настраивается отдельной кнопкой."
+                                                   Style="{StaticResource Hint}" Margin="0,0,0,10" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ComboBox x:Name="ActivationCombo" SelectionChanged="ActivationCombo_OnSelectionChanged"
+                                                      AutomationProperties.Name="Кнопка запуска диктовки" />
+                                            <Button Grid.Column="1" Content="Своя клавиша…" Style="{StaticResource CompactButton}"
+                                                    Click="CustomShortcutButton_OnClick"
+                                                    AutomationProperties.Name="Настроить свою клавишу запуска" />
+                                        </Grid>
+                                        <TextBlock x:Name="ActivationStatus" Style="{StaticResource Hint}" Margin="0,9,0,0"
+                                                   AutomationProperties.LiveSetting="Polite" />
+                                    </StackPanel>
+                                </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <Border Style="{StaticResource Card}" Padding="18,10">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <TextBlock Text="Последняя диктовка" Style="{StaticResource SectionTitle}"
+                                                   Margin="0,0,14,0" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="GeneralLastDictationText" Style="{StaticResource Hint}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   AutomationProperties.LiveSetting="Polite" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Content="Все записи" Style="{StaticResource CompactButton}" Margin="0"
+                                            VerticalAlignment="Center" Click="AllRecordingsButton_OnClick"
+                                            AutomationProperties.Name="Открыть историю записей" />
+                                </Grid>
                             </Border>
 
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
-                                    <TextBlock Text="Кнопка запуска" Style="{StaticResource SectionTitle}" />
-                                    <TextBlock Text="Выберите привычный способ. Своя клавиша настраивается отдельной кнопкой."
-                                               Style="{StaticResource Hint}" Margin="0,0,0,12" />
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <ComboBox x:Name="ActivationCombo" SelectionChanged="ActivationCombo_OnSelectionChanged"
-                                                  AutomationProperties.Name="Кнопка запуска диктовки" />
-                                        <Button Grid.Column="1" Content="Своя клавиша…" Style="{StaticResource CompactButton}"
-                                                Click="CustomShortcutButton_OnClick"
-                                                AutomationProperties.Name="Настроить свою клавишу запуска" />
+                                        <TextBlock Text="Поведение приложения" Style="{StaticResource SectionTitle}"
+                                                   VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                            <Button Content="Открыть словарь" Style="{StaticResource CompactButton}"
+                                                    Click="OpenDictionaryButton_OnClick" AutomationProperties.Name="Открыть пользовательский словарь" />
+                                            <Button x:Name="ExitButton" Content="Выйти из приложения" Style="{StaticResource DangerButton}"
+                                                    Click="ExitButton_OnClick" AutomationProperties.Name="Выйти из Слог" />
+                                        </StackPanel>
                                     </Grid>
-                                    <TextBlock x:Name="ActivationStatus" Style="{StaticResource Hint}" Margin="0,9,0,0"
-                                               AutomationProperties.LiveSetting="Polite" />
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource Card}">
-                                <StackPanel>
-                                    <TextBlock Text="Поведение приложения" Style="{StaticResource SectionTitle}" />
                                     <CheckBox x:Name="AutostartCheck" Content="Запускать вместе с Windows"
                                               Checked="Autostart_OnChanged" Unchecked="Autostart_OnChanged"
                                               AutomationProperties.Name="Запускать вместе с Windows" />
@@ -510,30 +580,9 @@
                                               Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged" />
                                     <CheckBox x:Name="NotificationsCheck" Content="Показывать только важные уведомления"
                                               Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged"
+                                              ToolTip="Успешная диктовка не создаёт всплывающих уведомлений."
                                               AutomationProperties.Name="Показывать важные уведомления" />
-                                    <TextBlock Text="Успешная диктовка не создаёт всплывающих уведомлений."
-                                               Style="{StaticResource Hint}" Margin="0,5,0,0" />
                                 </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource Card}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="Дополнительно" Style="{StaticResource SectionTitle}" />
-                                        <TextBlock Text="Словарь помогает закрепить имена, бренды и профессиональные термины."
-                                                   Style="{StaticResource Hint}" />
-                                    </StackPanel>
-                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                        <Button Content="Открыть словарь" Style="{StaticResource CompactButton}"
-                                                Click="OpenDictionaryButton_OnClick" AutomationProperties.Name="Открыть пользовательский словарь" />
-                                        <Button x:Name="ExitButton" Content="Выйти из приложения" Style="{StaticResource DangerButton}"
-                                                Click="ExitButton_OnClick" AutomationProperties.Name="Выйти из Слог" />
-                                    </StackPanel>
-                                </Grid>
                             </Border>
                         </StackPanel>
                     </Border>

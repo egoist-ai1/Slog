@@ -123,12 +123,15 @@ public partial class SettingsWindow : Window
         };
     }
 
-    private void ContentViewport_OnSizeChanged(object sender, SizeChangedEventArgs e)
+    private void RootGrid_OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
         // Keep the complete page reachable on small screens and high display scales.
         // At normal sizes the Viewbox uses 1:1 rendering and the editor grows with the window.
+        // Размер берётся у корня окна: Viewbox сам отдаёт размер масштабированного содержимого,
+        // и расчёт от него замыкался на собственном результате (ширина зависела от высоты страницы).
+        const double titleBarHeight = 32;
         SettingsContent.Width = Math.Max(960, e.NewSize.Width) - 48;
-        SettingsContent.Height = Math.Max(688, e.NewSize.Height) - 40;
+        SettingsContent.Height = Math.Max(688, e.NewSize.Height - titleBarHeight) - 40;
     }
 
     public void ShowAndActivate()
@@ -487,6 +490,7 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        ActivationEditor.Visibility = Visibility.Visible;
         ActivationStatus.Text = error ?? "Не удалось сменить кнопку запуска.";
         ActivationStatus.Foreground = LoudBrush;
         RefreshActivationState();
@@ -518,6 +522,7 @@ public partial class SettingsWindow : Window
             return;
         }
 
+        ActivationEditor.Visibility = Visibility.Visible;
         ActivationStatus.Text = error ?? "Не удалось назначить сочетание.";
         ActivationStatus.Foreground = LoudBrush;
     }
@@ -588,11 +593,13 @@ public partial class SettingsWindow : Window
             _loading = true;
             try { AutostartCheck.IsChecked = AutostartService.IsEnabled(); }
             finally { _loading = false; }
+            UpdateReadiness();
             return;
         }
 
         // Remember the explicit choice so startup restores the entry only while the user wants it.
         _settingsService.Save(_settingsService.Load() with { Autostart = wanted });
+        UpdateReadiness();
     }
 
     private void SoundVolumeSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -924,10 +931,12 @@ public partial class SettingsWindow : Window
     private void UpdateControlCenterState()
     {
         LastTimingText.Text = _mainWindow.LastOperationSummary;
+        GeneralLastDictationText.Text = _mainWindow.LastOperationSummary;
         if (AutoQwenCheck.IsEnabled) LocalQwenStatusText.Text = _mainWindow.LocalQwenStatus;
         var state = _mainWindow.CurrentAudioCaptureState;
         string title;
         string detail;
+        string? pillText = null;
         System.Windows.Media.Brush statusBrush;
 
         if (_mainWindow.IsRecording)
@@ -954,16 +963,31 @@ public partial class SettingsWindow : Window
             detail = "Возобновите микрофон, чтобы использовать кнопку запуска.";
             statusBrush = LoudBrush;
         }
+        else if (_mainWindow.ActivationFallbackNotice is { } fallbackNotice)
+        {
+            title = "Работает запасная кнопка";
+            detail = fallbackNotice;
+            statusBrush = LoudBrush;
+            pillText = "Запасная кнопка";
+        }
+        else if (!_mainWindow.AreRecognitionModelsReady)
+        {
+            title = "Модели распознавания не готовы";
+            detail = "Подробности в разделе «Распознавание».";
+            statusBrush = LoudBrush;
+            pillText = title;
+        }
         else
         {
-            title = "Готово к диктовке";
-            detail = $"{state.DeviceName} · {_mainWindow.CurrentActivationDisplayName}";
+            title = "Всё готово к диктовке";
+            detail = $"Кнопка запуска: {_mainWindow.CurrentActivationDisplayName}. Проверки ниже пройдены.";
             statusBrush = SuccessBrush;
+            pillText = "Готово к диктовке";
         }
 
         VoiceStateTitle.Text = title;
         VoiceStateDetail.Text = detail;
-        VoiceStatusText.Text = title;
+        VoiceStatusText.Text = pillText ?? title;
         VoiceStatusDot.Fill = statusBrush;
 
         var canStart = _mainWindow.IsRecording || _mainWindow.CanStartRecording;
@@ -979,6 +1003,8 @@ public partial class SettingsWindow : Window
             System.Windows.Automation.AutomationProperties.NameProperty,
             state.IsUserPaused ? "Возобновить микрофон" : "Приостановить микрофон");
 
+        UpdateReadiness();
+
         if (!_recognitionModelPreviewActive)
         {
             UpdateRecognitionModelState(
@@ -986,6 +1012,85 @@ public partial class SettingsWindow : Window
                 _mainWindow.RecognitionModelProgress);
         }
     }
+
+    private string RecognitionStatusLine(RecognitionModelPresentation presentation, bool allModelsReady)
+    {
+        var text = presentation.StatusText;
+        if (VoiceRuntimeProfile.IsPortable && allModelsReady)
+            text = "GigaAM v3 · русский · словарь · готово без сети";
+        if (VoiceRuntimeProfile.IsPortable && _mainWindow.IsSpeechFormattingUnavailable)
+            text = "Речь готова · оформление недоступно";
+        return text;
+    }
+
+    // Четыре проверки на «Главной»: то, что мешает диктовке, видно сразу и с действием.
+    private void UpdateReadiness()
+    {
+        var capture = _mainWindow.CurrentAudioCaptureState;
+        var rows = new List<ReadinessRow>(4);
+
+        if (!capture.IsAvailable)
+            rows.Add(new("mic", "Микрофон", "Устройство недоступно. Выберите другое в разделе «Аудио».", true, false, "Выбрать"));
+        else if (capture.IsPaused)
+            rows.Add(new("mic", "Микрофон", $"{capture.DeviceName} · приостановлен", true, false,
+                capture.IsUserPaused ? "Возобновить" : null));
+        else
+            rows.Add(new("mic", "Микрофон", capture.DeviceName, false, false, null));
+
+        var modelsReady = _mainWindow.AreRecognitionModelsReady;
+        var presentation = ModelProgressFormatter.ControlCenter(modelsReady, _mainWindow.RecognitionModelProgress);
+        var formattingDown = _mainWindow.IsSpeechFormattingUnavailable;
+        var modelsProblem = !modelsReady || presentation.IsFailure || formattingDown;
+        rows.Add(new("models", "Распознавание", RecognitionStatusLine(presentation, modelsReady), modelsProblem, false,
+            modelsProblem ? "Подробнее" : null));
+
+        var keyName = _mainWindow.CurrentActivationDisplayName;
+        rows.Add(_mainWindow.ActivationFallbackNotice is { } notice
+            ? new ReadinessRow("key", "Кнопка запуска", $"{keyName} · запасная. {notice}", true, false, "Изменить")
+            : new ReadinessRow("key", "Кнопка запуска", keyName, false, false, "Изменить"));
+
+        rows.Add(AutostartCheck.IsChecked == true
+            ? new ReadinessRow("autostart", "Автозапуск", "Слог включается вместе с Windows", false, false, null)
+            : new ReadinessRow("autostart", "Автозапуск", "Выключен: после перезагрузки Слог не запустится сам", false, true, "Включить"));
+
+        // Строки пересоздаются только при изменении, чтобы не сбрасывать фокус на кнопке.
+        if (_readinessRows is not null && _readinessRows.SequenceEqual(rows)) return;
+        _readinessRows = rows;
+        ReadinessItems.ItemsSource = rows;
+    }
+
+    private List<ReadinessRow>? _readinessRows;
+
+    private void ReadinessAction_OnClick(object sender, RoutedEventArgs e)
+    {
+        switch ((sender as FrameworkElement)?.Tag as string)
+        {
+            case "mic":
+                if (_mainWindow.CurrentAudioCaptureState.IsAvailable) PauseButton_OnClick(sender, e);
+                else SettingsTabs.SelectedItem = AudioTab;
+                break;
+            case "models":
+                SettingsTabs.SelectedItem = RecognitionTab;
+                break;
+            case "key":
+                if (ActivationEditor.Visibility == Visibility.Visible)
+                {
+                    ActivationEditor.Visibility = Visibility.Collapsed;
+                }
+                else
+                {
+                    ActivationEditor.Visibility = Visibility.Visible;
+                    ActivationCombo.Focus();
+                }
+                break;
+            case "autostart":
+                AutostartCheck.IsChecked = true;
+                break;
+        }
+    }
+
+    private void AllRecordingsButton_OnClick(object sender, RoutedEventArgs e) =>
+        SettingsTabs.SelectedItem = HistoryTab;
 
     private void UpdateRecognitionModelState(
         bool allModelsReady,
@@ -1155,6 +1260,19 @@ public partial class SettingsWindow : Window
         new(ActivationBinding.Keyboard, "Ctrl + Alt + Space"),
         new(ActivationBinding.CustomKeyboard, "Своя клавиша")
     ];
+
+    private sealed record ReadinessRow(
+        string Id,
+        string Title,
+        string Detail,
+        bool IsProblem,
+        bool IsNeutral,
+        string? ActionText)
+    {
+        public Visibility ActionVisibility => ActionText is null ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility OkVisibility => ActionText is null && !IsProblem ? Visibility.Visible : Visibility.Collapsed;
+        public string ActionAutomationName => $"{ActionText}: {Title}";
+    }
 
     private sealed record HistoryItemPresentation(
         string Id,
