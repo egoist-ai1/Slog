@@ -250,7 +250,10 @@ internal enum WatchdogVerdict
     Wait,
 
     /// <summary>Хук подозрителен: переустановить.</summary>
-    Reinstall
+    Reinstall,
+
+    /// <summary>На переднем плане игра, кнопка не удерживается: Mouse 5 принадлежит игре, сторож молчит.</summary>
+    GameForeground
 }
 
 /// <param name="Verdict">Итог окна.</param>
@@ -273,11 +276,18 @@ internal static class HookWatchdog
     /// это неизвестно — передаётся false, и отпускание решается повторным вызовом после неё.
     /// </param>
     internal static WatchdogDecision Evaluate(
-        bool cursorMoved, bool hookSeenInWindow, bool realInput, bool held, int streak, bool oldHookInvalid)
+        bool cursorMoved, bool hookSeenInWindow, bool realInput, bool held, int streak, bool oldHookInvalid,
+        bool foregroundIsGame = false)
     {
         if (!cursorMoved || hookSeenInWindow)
         {
             return new WatchdogDecision(WatchdogVerdict.Healthy, 0, false);
+        }
+
+        // В игре отсутствие событий хука — норма (игра сама владеет Mouse 5): не переустанавливаем.
+        if (foregroundIsGame && !held)
+        {
+            return new WatchdogDecision(WatchdogVerdict.GameForeground, 0, false);
         }
 
         if (!realInput)

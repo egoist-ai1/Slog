@@ -101,22 +101,32 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
         ArgumentNullException.ThrowIfNull(samples);
         var elapsed = Stopwatch.StartNew();
         await _operation.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var queueMs = elapsed.Elapsed.TotalMilliseconds;
         try
         {
+            var warmStart = elapsed.Elapsed;
             await WarmUpCoreAsync(null, cancellationToken).ConfigureAwait(false);
+            var warmMs = (elapsed.Elapsed - warmStart).TotalMilliseconds;
             ObjectDisposedException.ThrowIf(_disposed, this);
             // Even a fully warm engine must not do long-audio chunk planning on the WPF dispatcher.
+            var planStart = elapsed.Elapsed;
             var chunks = await Task.Run(() => GigaAmAudioChunker.Split(QuietSpeechNormalizer.Apply(samples), sampleRate), cancellationToken)
                 .ConfigureAwait(false);
+            var planMs = (elapsed.Elapsed - planStart).TotalMilliseconds;
             var decoded = new List<DecodedAudioChunk>(chunks.Count);
             var format = FormatSpeechPunctuation;
+            // Диагностика медленного распознавания: только замеры, поведение не меняется.
+            var timings = new DecodeTimings();
+            var before = RecognitionDiagnostics.Capture();
             foreach (var chunk in chunks)
             {
-                var text = await DecodeChunkAsync(GigaAmTranscriptionService.GetEngineSamples(chunk.Samples), format, cancellationToken)
+                var text = await DecodeChunkAsync(GigaAmTranscriptionService.GetEngineSamples(chunk.Samples), format, cancellationToken, timings)
                     .ConfigureAwait(false);
                 if (!string.IsNullOrWhiteSpace(text))
                     decoded.Add(new DecodedAudioChunk(text, chunk.ParagraphBreakBefore));
             }
+            var after = RecognitionDiagnostics.Capture();
+            WriteBreakdown(samples.Length / (double)sampleRate, chunks.Count, queueMs, warmMs, planMs, timings, before, after);
             cancellationToken.ThrowIfCancellationRequested();
             ObjectDisposedException.ThrowIf(_disposed, this);
             return CreateResult(TranscriptChunkJoiner.Join(decoded), elapsed.Elapsed, format);
@@ -160,9 +170,39 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
         }
     }
 
-    private async Task<string> DecodeChunkAsync(float[] samples, bool format, CancellationToken cancellationToken)
+    /// <summary>Накопитель времени основного движка и добавки форматтера по кускам одной записи.</summary>
+    private sealed class DecodeTimings
+    {
+        internal double PrimaryMs;
+        internal double FormatterExtraMs;
+    }
+
+    private static void WriteBreakdown(
+        double audioSeconds, int chunks, double queueMs, double warmMs, double planMs, DecodeTimings timings,
+        RecognitionDiagnostics.Snapshot before, RecognitionDiagnostics.Snapshot after)
+    {
+        try
+        {
+            var decodeMs = Stopwatch.GetElapsedTime(before.Timestamp, after.Timestamp).TotalMilliseconds;
+            AppLog.Write(RecognitionDiagnostics.Format(new RecognitionBreakdown(
+                audioSeconds, chunks, queueMs, warmMs, planMs, decodeMs, timings.PrimaryMs, timings.FormatterExtraMs,
+                after.ProcessCpuMs - before.ProcessCpuMs,
+                RecognitionDiagnostics.SystemBusyPercent(before, after),
+                after.PageFaults - before.PageFaults,
+                after.WorkingSetMb,
+                after.GcPauseMs - before.GcPauseMs)));
+        }
+        catch
+        {
+            // Диагностика не должна ломать распознавание.
+        }
+    }
+
+    private async Task<string> DecodeChunkAsync(
+        float[] samples, bool format, CancellationToken cancellationToken, DecodeTimings? timings = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        var chunkStart = Stopwatch.GetTimestamp();
         // The formatter decodes the same samples concurrently with the primary engine: each engine
         // serializes on its own decode lock, so only wall-clock time changes, not the result.
         var primaryTask = ((ISampleTranscriptionService)_primary)
@@ -174,6 +214,7 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
         try
         {
             primary = await primaryTask.ConfigureAwait(false);
+            if (timings is not null) timings.PrimaryMs += Stopwatch.GetElapsedTime(chunkStart).TotalMilliseconds;
             cancellationToken.ThrowIfCancellationRequested();
             ObjectDisposedException.ThrowIf(_disposed, this);
         }
@@ -190,7 +231,9 @@ public sealed class RussianSpeechQualityService : ITranscriptionService, ISample
         }
         try
         {
+            var formatterWaitStart = Stopwatch.GetTimestamp();
             var secondary = await formatterTask.ConfigureAwait(false);
+            if (timings is not null) timings.FormatterExtraMs += Stopwatch.GetElapsedTime(formatterWaitStart).TotalMilliseconds;
             cancellationToken.ThrowIfCancellationRequested();
             ObjectDisposedException.ThrowIf(_disposed, this);
             var composed = AudioTranscriptComposer.Compose(primary.Text, secondary.Text);

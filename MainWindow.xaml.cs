@@ -190,6 +190,9 @@ public partial class MainWindow : Window, IDisposable
     }
 
     public event EventHandler? ActivationBindingChanged;
+
+    /// <summary>Почему запрошенная кнопка запуска не подключилась; null, если всё как выбрано. В настройки не пишется.</summary>
+    public string? ActivationFallbackNotice { get; private set; }
     public event EventHandler<AudioCaptureStateChangedEventArgs>? AudioCaptureStateChanged;
 
     public event EventHandler<TranslationEngineHealthChangedEventArgs> TranslationEngineHealthChanged
@@ -371,6 +374,8 @@ public partial class MainWindow : Window, IDisposable
         }
 
         AppLog.Write($"Requested activation binding unavailable: {error}");
+        // До fallback: событие ActivationBindingChanged срабатывает внутри TryApplyActivationBinding.
+        ActivationFallbackNotice = ActivationBindingInfo.FallbackNotice(ActivationBindingInfo.DisplayName(requested), error);
         foreach (var fallback in new[] { ActivationBinding.Mouse5, ActivationBinding.Keyboard })
         {
             if (TryApplyActivationBinding(requested.WithBinding(fallback), persist: false, out _))
@@ -379,6 +384,7 @@ public partial class MainWindow : Window, IDisposable
             }
         }
 
+        ActivationFallbackNotice = null;
         throw new InvalidOperationException("Не удалось подключить ни Mouse 5, ни Ctrl + Alt + Space.");
     }
 
@@ -479,6 +485,11 @@ public partial class MainWindow : Window, IDisposable
 
             _pushToTalk.Reset();
             _activationConfiguration = configuration;
+            if (persist)
+            {
+                // Пользователь сам выбрал кнопку: прежнее предупреждение больше не нужно.
+                ActivationFallbackNotice = null;
+            }
             ActivationBindingChanged?.Invoke(this, EventArgs.Empty);
             AppLog.Write($"Activation binding changed: {ActivationBindingInfo.DisplayName(configuration)}");
             error = null;

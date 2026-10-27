@@ -24,10 +24,40 @@ public sealed class ThemeFeedbackNotificationTests
     [InlineData(2, true)]
     [InlineData(3, true)]
     [InlineData(4, false)]
+    [InlineData(5, true)]
     public void Notification_policy_allows_only_actionable_events(
         int kind,
         bool expected) =>
         Assert.Equal(expected, TrayNotificationPolicy.ShouldNotify((TrayNotificationKind)kind, enabled: true));
+
+    [Fact]
+    public void Activation_fallback_notice_names_requested_binding_and_reason()
+    {
+        var notice = ActivationBindingInfo.FallbackNotice("Mouse 5 + Ctrl + Alt + Space", "сочетание занято другим приложением.");
+
+        Assert.Contains("Mouse 5 + Ctrl + Alt + Space", notice);
+        Assert.Contains("сочетание занято другим приложением", notice);
+        Assert.DoesNotContain("..", notice);
+        Assert.False(string.IsNullOrWhiteSpace(ActivationBindingInfo.FallbackNotice("X", null)));
+    }
+
+    [Fact]
+    public void Recognition_breakdown_line_has_all_fields_and_no_text()
+    {
+        var line = RecognitionDiagnostics.Format(new RecognitionBreakdown(
+            2.5, 1, 3, 0, 12, 90, 80, 10, 120, 35, 40, 512, 4));
+
+        foreach (var field in new[]
+        {
+            "audio=", "chunks=", "queue=", "warm=", "plan=", "decode=", "primary=", "formatterExtra=",
+            "cpu=", "cpuRatio=", "sysBusy=", "faults=", "ws=", "gcPause="
+        })
+            Assert.Contains(field, line);
+        Assert.Contains("audio=2.50s", line);
+        Assert.Contains("cpuRatio=1.33", line);
+        Assert.DoesNotContain("секретный текст", line);
+        Assert.DoesNotContain("\n", line);
+    }
 
     [Fact]
     public void Disabling_notifications_suppresses_every_kind()
