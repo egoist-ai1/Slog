@@ -4,6 +4,7 @@
 
 ## Recent notes
 
+- [2026-10-27T150000Z-home-readiness-last-dictation](./2026-10-27T150000Z-home-readiness-last-dictation.md)
 - [2026-10-27T120000Z-reliability-3-3-1-guard-fallback-diagnostics](./2026-10-27T120000Z-reliability-3-3-1-guard-fallback-diagnostics.md)
 - [2026-10-02T172442Z-resource-242-published-installed](./2026-10-02T172442Z-resource-242-published-installed.md)
 - [2026-10-02T162134Z-current-model-resource-candidate-242](./2026-10-02T162134Z-current-model-resource-candidate-242.md)
@@ -13,13 +14,12 @@
 - [2026-10-02T123444Z-gigaam-heldout-reject-and-cleanup](./2026-10-02T123444Z-gigaam-heldout-reject-and-cleanup.md)
 - [2026-10-02T111552Z-gigaam-windows-user-scope](./2026-10-02T111552Z-gigaam-windows-user-scope.md)
 - [2026-10-02T102705Z-tone-lm-results-and-vibevoice-feasibility](./2026-10-02T102705Z-tone-lm-results-and-vibevoice-feasibility.md)
-- [2026-10-02T082318Z-gigachat-bounded-load-and-tone-plan](./2026-10-02T082318Z-gigachat-bounded-load-and-tone-plan.md)
 
 ## Archive
 
-- [2026/10](./archive/2026/10/) - 9 notes
+- [2026/10](./archive/2026/10/) - 10 notes
 - [2026/09](./archive/2026/09/) - 6 notes
 - [2026/08](./archive/2026/08/) - 15 notes
 - [2026/07](./archive/2026/07/) - 1 notes
 
-Hot set: 10. Archived: 31.
+Hot set: 10. Archived: 32.
