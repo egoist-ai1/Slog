@@ -276,7 +276,12 @@ public partial class SettingsWindow : Window
             }
             Inspect(page);
             File.WriteAllText(Path.ChangeExtension(outputPath, ".layout.json"), System.Text.Json.JsonSerializer.Serialize(
-                new { fits = overflow.Count == 0, page = ((TabItem)SettingsTabs.SelectedItem).Name, width = ActualWidth, height = ActualHeight, overflow, controls },
+                new
+                {
+                    fits = overflow.Count == 0, page = ((TabItem)SettingsTabs.SelectedItem).Name, width = ActualWidth, height = ActualHeight,
+                    contentWidth = SettingsContent.ActualWidth, tabsWidth = SettingsTabs.ActualWidth, pageWidth = page.ActualWidth,
+                    overflow, controls
+                },
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
         }
     }
