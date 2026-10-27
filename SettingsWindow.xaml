@@ -16,6 +16,13 @@
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
+        <!-- Образцы тем для плиток «Внешний вид»: фиксированы, не зависят от текущей темы -->
+        <SolidColorBrush x:Key="ThemePreviewDarkBack" Color="#08080A" />
+        <SolidColorBrush x:Key="ThemePreviewDarkLine" Color="#2A2A30" />
+        <SolidColorBrush x:Key="ThemePreviewDarkAccent" Color="#A8FF00" />
+        <SolidColorBrush x:Key="ThemePreviewLightBack" Color="#F6F6F8" />
+        <SolidColorBrush x:Key="ThemePreviewLightLine" Color="#D7D7DD" />
+        <SolidColorBrush x:Key="ThemePreviewLightAccent" Color="#4A8200" />
         <Style TargetType="TextBlock">
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
@@ -739,12 +746,14 @@
                                 <StackPanel Margin="0,12,0,0">
                                     <TextBlock Text="Локальная модель оформляет текст и предлагает исправления. Подключение — через встроенный запуск, Ollama или LM Studio."
                                                Style="{StaticResource Hint}" Margin="0,0,0,12" />
-                                    <Button x:Name="StartLocalQwenButton" Content="Запустить локальную Qwen" Click="StartLocalQwen_OnClick" HorizontalAlignment="Left" Margin="0,0,0,8" />
-                                    <CheckBox x:Name="AutoQwenCheck" Content="Запускать Qwen вместе с Voice"
-                                              Checked="AutoQwen_OnChanged" Unchecked="AutoQwen_OnChanged" />
-                                    <TextBlock x:Name="LocalQwenStatusText" Style="{StaticResource Hint}" Margin="0,0,0,6" />
-                                    <TextBlock Text="Qwen остаётся в памяти до выключения или закрытия Voice. В режиме «Дословно» автоматический запуск отключён. Русский распознаватель остаётся готовым к диктовке."
-                                               Style="{StaticResource Hint}" Margin="0,0,0,12" />
+                                    <DockPanel LastChildFill="False">
+                                        <Button x:Name="StartLocalQwenButton" DockPanel.Dock="Left" Content="Запустить локальную Qwen" Click="StartLocalQwen_OnClick" />
+                                        <CheckBox x:Name="AutoQwenCheck" DockPanel.Dock="Left" Margin="16,0,0,0" Content="Запускать вместе с Voice"
+                                                  Checked="AutoQwen_OnChanged" Unchecked="AutoQwen_OnChanged" />
+                                    </DockPanel>
+                                    <TextBlock x:Name="LocalQwenStatusText" Style="{StaticResource Hint}" Margin="0,8,0,4" />
+                                    <TextBlock Text="Qwen остаётся в памяти до закрытия Voice. В режиме «Дословно» автозапуск отключён."
+                                               Style="{StaticResource Hint}" Margin="0,0,0,14" />
                                     <TextBlock Text="Адрес локального сервера" Style="{StaticResource Hint}" Margin="0,0,0,5" />
                                     <DockPanel>
                                         <Button x:Name="FindTextModelsButton" DockPanel.Dock="Right" Content="Найти модели"
@@ -764,7 +773,7 @@
                 </TabItem>
 
                 <TabItem x:Name="TextTab" Header="Текст">
-                    <Grid Margin="18,2,0,0">
+                    <Grid Margin="18,2,0,0" Grid.IsSharedSizeScope="True">
                         <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <Border Grid.Row="0" Grid.ColumnSpan="2" Style="{StaticResource Card}">
@@ -796,26 +805,44 @@
                                 </Style>
                             </Border.Style>
                             <Grid>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <TextBlock Text="Исходный текст" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" SharedSizeGroup="TextActionsRow" />
+                                    <RowDefinition Height="Auto" SharedSizeGroup="TextHintRow" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="Исходный текст" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button x:Name="CopySourceButton" Content="Копировать" Click="CopySource_OnClick"
+                                            Style="{StaticResource CompactButton}" HorizontalAlignment="Right" />
+                                </Grid>
                                 <TextBox x:Name="EditorTextBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto" MaxLength="150000" TextChanged="EditorText_OnChanged"
                                          AutomationProperties.Name="Исходный текст для редактирования" />
                                 <WrapPanel Grid.Row="2" Margin="0,12,0,0">
                                     <Button x:Name="PunctuateTextButton" Content="Оформить" Click="PunctuateText_OnClick" Margin="0,0,8,8" />
-                                    <Button x:Name="CorrectTextButton" Content="Исправить оговорки" Click="CorrectText_OnClick" Margin="0,0,8,8" />
-                                    <Button x:Name="CopySourceButton" Content="Копировать" Click="CopySource_OnClick" Margin="0,0,0,8" />
+                                    <Button x:Name="CorrectTextButton" Content="Исправить оговорки" Click="CorrectText_OnClick" Margin="0,0,0,8" />
                                 </WrapPanel>
-                                <TextBlock Grid.Row="3" Text="Qwen обработает весь текст или выделение. Исправления слов проверьте перед копированием." Style="{StaticResource Hint}" />
+                                <TextBlock Grid.Row="3" Text="Qwen обработает весь текст или выделение." Style="{StaticResource Hint}" />
                             </Grid>
                         </Border>
                         <Border x:Name="TextResultCard" Grid.Row="1" Grid.Column="1" Style="{StaticResource Card}" Margin="8,0,0,0" Visibility="Collapsed">
                             <Grid>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
-                                <TextBlock Text="Результат Qwen" FontWeight="SemiBold" Margin="0,0,0,8" />
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" SharedSizeGroup="TextActionsRow" />
+                                    <RowDefinition Height="Auto" SharedSizeGroup="TextHintRow" />
+                                </Grid.RowDefinitions>
+                                <Grid Margin="0,0,0,8">
+                                    <TextBlock Text="Результат Qwen" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Content="Копировать" Click="CopyResult_OnClick"
+                                            Style="{StaticResource CompactButton}" HorizontalAlignment="Right"
+                                            AutomationProperties.Name="Копировать результат" />
+                                </Grid>
                                 <TextBox x:Name="EditorResultBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap"
                                          VerticalScrollBarVisibility="Auto" MaxLength="16000" AutomationProperties.Name="Предложенный результат" />
-                                <Button Grid.Row="2" Content="Копировать результат" HorizontalAlignment="Left" Margin="0,12,0,0" Click="CopyResult_OnClick" />
+                                <TextBlock Grid.Row="3" Text="Проверьте исправления слов перед копированием." Style="{StaticResource Hint}" />
                             </Grid>
                         </Border>
                     </Grid>
@@ -829,8 +856,102 @@
                                     <TextBlock Text="Тема" Style="{StaticResource SectionTitle}" />
                                     <TextBlock Text="Системная тема следует за настройкой приложений Windows. Светлая и тёмная темы фиксируются независимо."
                                                Style="{StaticResource Hint}" Margin="0,0,0,12" />
-                                    <ComboBox x:Name="ThemeCombo" SelectionChanged="ThemeCombo_OnSelectionChanged"
-                                              AutomationProperties.Name="Тема приложения" />
+                                    <ListBox x:Name="ThemeCombo" SelectionChanged="ThemeCombo_OnSelectionChanged"
+                                             AutomationProperties.Name="Тема приложения"
+                                             Background="Transparent" BorderThickness="0" Padding="0"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                             KeyboardNavigation.DirectionalNavigation="Cycle">
+                                        <ListBox.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <UniformGrid Columns="3" />
+                                            </ItemsPanelTemplate>
+                                        </ListBox.ItemsPanel>
+                                        <ListBox.ItemContainerStyle>
+                                            <Style TargetType="ListBoxItem">
+                                                <Setter Property="Margin" Value="0,0,10,0" />
+                                                <Setter Property="Padding" Value="8" />
+                                                <Setter Property="Foreground" Value="{DynamicResource AppTextPrimaryBrush}" />
+                                                <Setter Property="AutomationProperties.Name" Value="{Binding Label}" />
+                                                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="ListBoxItem">
+                                                            <Border x:Name="Tile" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                                                    Background="{DynamicResource AppSurfaceRaisedBrush}"
+                                                                    BorderBrush="{DynamicResource AppBorderBrush}" BorderThickness="1">
+                                                                <ContentPresenter />
+                                                            </Border>
+                                                            <ControlTemplate.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AppBorderStrongBrush}" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsSelected" Value="True">
+                                                                    <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+                                                                    <Setter TargetName="Tile" Property="BorderThickness" Value="2" />
+                                                                    <Setter TargetName="Tile" Property="Padding" Value="7" />
+                                                                    <Setter TargetName="Tile" Property="Background" Value="{DynamicResource AppSelectionBrush}" />
+                                                                </Trigger>
+                                                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                    <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AppTextPrimaryBrush}" />
+                                                                </Trigger>
+                                                            </ControlTemplate.Triggers>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <StackPanel>
+                                                    <!-- Миниатюра окна: цвета фиксированы, это образец темы, а не часть текущей -->
+                                                    <Border Height="64" CornerRadius="6" ClipToBounds="True" BorderThickness="1"
+                                                            BorderBrush="{DynamicResource AppBorderBrush}">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <Border x:Name="DarkHalf" Grid.ColumnSpan="2" Background="{StaticResource ThemePreviewDarkBack}" Visibility="Collapsed">
+                                                                <Grid>
+                                                                    <Rectangle Width="3" Height="26" Fill="{StaticResource ThemePreviewDarkAccent}" HorizontalAlignment="Left" Margin="10,0,0,0" />
+                                                                    <Rectangle Height="6" Width="64" RadiusX="3" RadiusY="3" Fill="{StaticResource ThemePreviewDarkLine}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="22,14,0,0" />
+                                                                    <Rectangle Height="6" Width="44" RadiusX="3" RadiusY="3" Fill="{StaticResource ThemePreviewDarkLine}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="22,26,0,0" />
+                                                                    <Rectangle Height="10" Width="34" RadiusX="5" RadiusY="5" Fill="{StaticResource ThemePreviewDarkAccent}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" />
+                                                                </Grid>
+                                                            </Border>
+                                                            <Border x:Name="LightHalf" Grid.ColumnSpan="2" Background="{StaticResource ThemePreviewLightBack}" Visibility="Collapsed">
+                                                                <Grid>
+                                                                    <Rectangle Width="3" Height="26" Fill="{StaticResource ThemePreviewLightAccent}" HorizontalAlignment="Left" Margin="10,0,0,0" />
+                                                                    <Rectangle Height="6" Width="64" RadiusX="3" RadiusY="3" Fill="{StaticResource ThemePreviewLightLine}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="22,14,0,0" />
+                                                                    <Rectangle Height="6" Width="44" RadiusX="3" RadiusY="3" Fill="{StaticResource ThemePreviewLightLine}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="22,26,0,0" />
+                                                                    <Rectangle Height="10" Width="34" RadiusX="5" RadiusY="5" Fill="{StaticResource ThemePreviewLightAccent}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" />
+                                                                </Grid>
+                                                            </Border>
+                                                            <Border x:Name="SystemLeft" Background="{StaticResource ThemePreviewDarkBack}" Visibility="Collapsed">
+                                                                <Rectangle Width="3" Height="26" Fill="{StaticResource ThemePreviewDarkAccent}" HorizontalAlignment="Left" Margin="10,0,0,0" />
+                                                            </Border>
+                                                            <Border x:Name="SystemRight" Grid.Column="1" Background="{StaticResource ThemePreviewLightBack}" Visibility="Collapsed">
+                                                                <Rectangle Height="10" Width="34" RadiusX="5" RadiusY="5" Fill="{StaticResource ThemePreviewLightAccent}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,10,10" />
+                                                            </Border>
+                                                        </Grid>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Label}" FontWeight="SemiBold" Margin="2,8,0,0" />
+                                                </StackPanel>
+                                                <DataTemplate.Triggers>
+                                                    <DataTrigger Binding="{Binding Theme}" Value="Dark">
+                                                        <Setter TargetName="DarkHalf" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Theme}" Value="Light">
+                                                        <Setter TargetName="LightHalf" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Theme}" Value="System">
+                                                        <Setter TargetName="SystemLeft" Property="Visibility" Value="Visible" />
+                                                        <Setter TargetName="SystemRight" Property="Visibility" Value="Visible" />
+                                                    </DataTrigger>
+                                                </DataTemplate.Triggers>
+                                            </DataTemplate>
+                                        </ListBox.ItemTemplate>
+                                    </ListBox>
                                     <TextBlock x:Name="ThemeStatus" Style="{StaticResource Hint}" Margin="0,10,0,0"
                                                AutomationProperties.LiveSetting="Polite" />
                                 </StackPanel>
@@ -921,7 +1042,7 @@
                                                                         Click="HistoryTranscribeButton_OnClick"
                                                                         ToolTip="Распознать запись заново и открыть текст в редакторе"
                                                                         AutomationProperties.Name="Повторно распознать запись и открыть текст" />
-                                                                <Button Content="{Binding PlayLabel}" MinWidth="104"
+                                                                <Button Content="{Binding PlayLabel}" MinWidth="112"
                                                                         Tag="{Binding Id}" Style="{StaticResource CompactButton}"
                                                                         Click="HistoryPlayButton_OnClick"
                                                                         AutomationProperties.Name="{Binding PlayAutomationName}" />

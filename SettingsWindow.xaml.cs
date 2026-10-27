@@ -49,7 +49,6 @@ public partial class SettingsWindow : Window
         _recentRecordings = mainWindow.RecentRecordings;
         _quit = quit;
         ThemeCombo.ItemsSource = ThemeChoices;
-        ThemeCombo.DisplayMemberPath = nameof(ThemeChoice.Label);
         ActivationCombo.ItemsSource = ActivationChoices;
         ActivationCombo.DisplayMemberPath = nameof(ActivationChoice.Label);
         ExitButton.Visibility = quit is null ? Visibility.Collapsed : Visibility.Visible;
