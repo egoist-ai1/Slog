@@ -373,7 +373,10 @@ public partial class App : System.Windows.Application
                 }
                 else if (renderMode.Contains("general", StringComparison.OrdinalIgnoreCase))
                 {
-                    settingsWindow.ShowGeneralAndActivate();
+                    if (renderMode.Contains("problems", StringComparison.OrdinalIgnoreCase))
+                        settingsWindow.ShowReadinessProblemsPreview();
+                    else
+                        settingsWindow.ShowGeneralAndActivate();
                     await Task.Delay(80);
                 }
                 else if (renderMode.Contains("models", StringComparison.OrdinalIgnoreCase))

@@ -178,6 +178,24 @@ public partial class SettingsWindow : Window
         SettingsTabs.SelectedItem = GeneralTab;
     }
 
+    // Static render fixture: все четыре проблемные строки «Готовности» сразу; реальные настройки не меняются.
+    public void ShowReadinessProblemsPreview()
+    {
+        ShowGeneralAndActivate();
+        _readinessPreviewActive = true;
+        var rows = new List<ReadinessRow>
+        {
+            new("mic", "Микрофон", "Устройство недоступно. Выберите другое в разделе «Аудио».", true, false, "Выбрать"),
+            new("models", "Распознавание", "GigaAM v3 · ядро · не удалось скачать", true, false, "Подробнее"),
+            new("key", "Кнопка запуска", "Mouse 5 · запасная. Кнопка занята другой программой.", true, false, "Изменить"),
+            new("autostart", "Автозапуск", "Выключен: после перезагрузки Слог не запустится сам", false, true, "Включить")
+        };
+        _readinessRows = rows;
+        ReadinessItems.ItemsSource = rows;
+    }
+
+    private bool _readinessPreviewActive;
+
     public void ShowRecognitionAndActivate()
     {
         ShowAndActivate();
@@ -1025,6 +1043,7 @@ public partial class SettingsWindow : Window
     // Четыре проверки на «Главной»: то, что мешает диктовке, видно сразу и с действием.
     private void UpdateReadiness()
     {
+        if (_readinessPreviewActive) return;
         var capture = _mainWindow.CurrentAudioCaptureState;
         var rows = new List<ReadinessRow>(4);
 
