@@ -347,7 +347,7 @@
                                      IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
                                 <Ellipse.RenderTransform><ScaleTransform x:Name="StartRingScale" /></Ellipse.RenderTransform>
                             </Ellipse>
-                            <Ellipse x:Name="TailArc" Width="40" Height="40" Visibility="Collapsed"
+                            <Ellipse x:Name="TailArc" Width="40" Height="40" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"
                                      Stroke="#A8FF00" StrokeThickness="2" StrokeDashCap="Round"
                                      StrokeDashArray="59.7 61" IsHitTestVisible="False"
                                      RenderTransformOrigin="0.5,0.5">
