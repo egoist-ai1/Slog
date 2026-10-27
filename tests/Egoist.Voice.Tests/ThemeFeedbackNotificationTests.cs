@@ -42,6 +42,24 @@ public sealed class ThemeFeedbackNotificationTests
     }
 
     [Fact]
+    public void Recognition_breakdown_line_has_all_fields_and_no_text()
+    {
+        var line = RecognitionDiagnostics.Format(new RecognitionBreakdown(
+            2.5, 1, 3, 0, 12, 90, 80, 10, 120, 35, 40, 512, 4));
+
+        foreach (var field in new[]
+        {
+            "audio=", "chunks=", "queue=", "warm=", "plan=", "decode=", "primary=", "formatterExtra=",
+            "cpu=", "cpuRatio=", "sysBusy=", "faults=", "ws=", "gcPause="
+        })
+            Assert.Contains(field, line);
+        Assert.Contains("audio=2.50s", line);
+        Assert.Contains("cpuRatio=1.33", line);
+        Assert.DoesNotContain("секретный текст", line);
+        Assert.DoesNotContain("\n", line);
+    }
+
+    [Fact]
     public void Disabling_notifications_suppresses_every_kind()
     {
         foreach (var kind in Enum.GetValues<TrayNotificationKind>())
