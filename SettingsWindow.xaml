@@ -850,14 +850,18 @@
                                                     <Border Background="{DynamicResource AppSurfaceRaisedBrush}"
                                                             BorderBrush="{DynamicResource AppListBorderBrush}" BorderThickness="1"
                                                             CornerRadius="10" Padding="12" Margin="0,0,0,8">
-                                                        <WrapPanel>
-                                                            <StackPanel Width="204" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" MinWidth="160" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding TimeLabel}" FontSize="14"
                                                                            FontWeight="SemiBold" />
                                                                 <TextBlock Text="{Binding DetailLabel}" Style="{StaticResource Hint}"
                                                                            Margin="0,3,8,0" />
                                                             </StackPanel>
-                                                            <WrapPanel Margin="0,4,0,0" VerticalAlignment="Center">
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                                 <Button Content="Скопировать" Tag="{Binding Id}"
                                                                         Style="{StaticResource CompactButton}"
                                                                         Click="HistoryQuickCopyButton_OnClick"
@@ -868,7 +872,7 @@
                                                                         Click="HistoryTranscribeButton_OnClick"
                                                                         ToolTip="Распознать запись заново и открыть текст в редакторе"
                                                                         AutomationProperties.Name="Повторно распознать запись и открыть текст" />
-                                                                <Button Content="{Binding PlayLabel}"
+                                                                <Button Content="{Binding PlayLabel}" MinWidth="104"
                                                                         Tag="{Binding Id}" Style="{StaticResource CompactButton}"
                                                                         Click="HistoryPlayButton_OnClick"
                                                                         AutomationProperties.Name="{Binding PlayAutomationName}" />
@@ -876,8 +880,8 @@
                                                                         Style="{StaticResource CompactButton}"
                                                                         Click="HistoryDeleteButton_OnClick"
                                                                         AutomationProperties.Name="Удалить запись" />
-                                                            </WrapPanel>
-                                                        </WrapPanel>
+                                                            </StackPanel>
+                                                        </Grid>
                                                     </Border>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
