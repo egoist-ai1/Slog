@@ -16,7 +16,7 @@ function Run-Native([string]$Path, [string[]]$Arguments, [int]$TimeoutMs=120000)
 }
 try {
     $receipt = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'compact-installer.json') -Raw | ConvertFrom-Json
-    $installer = Join-Path $PSScriptRoot 'EgoistVoice-Setup-Compact-RU-2.2.0-win-x64.exe'
+    $installer = Join-Path $PSScriptRoot ([IO.Path]::GetFileName($receipt.installer))
     if ((Get-FileHash -LiteralPath $installer).Hash -ne $receipt.sha256) { throw 'Guest installer hash mismatch.' }
     $payload = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'portable-stage.manifest.json') -Raw | ConvertFrom-Json
     $destination = Join-Path $env:LOCALAPPDATA 'Programs\Voice проверка\Compact'
@@ -29,6 +29,13 @@ try {
     Run-Native $exe @('--local-asr-check','C:\VoiceInput\synthetic-russian.wav','C:\VoiceInput\synthetic-reference.txt','C:\VoiceOutput\asr.json')
     if (!(Get-Content -LiteralPath 'C:\VoiceOutput\asr.json' -Raw | ConvertFrom-Json).passed) { throw 'Guest native ASR failed.' }
     $steps.Add('Offline CPU transcription without .NET installation verified')
+    # Чистая Windows без .NET: окно настроек и капсула должны подняться и отрисоваться.
+    Run-Native $exe @('--render-settings-preview','C:\VoiceOutput\settings-general.png','general')
+    Run-Native $exe @('--render-state-preview','tail-half','C:\VoiceOutput\capsule-tail-half.png')
+    foreach ($shot in 'settings-general.png','capsule-tail-half.png') {
+        if (!(Test-Path -LiteralPath (Join-Path 'C:\VoiceOutput' $shot)) -or (Get-Item -LiteralPath (Join-Path 'C:\VoiceOutput' $shot)).Length -lt 2000) { throw ('UI render failed: ' + $shot) }
+    }
+    $steps.Add('Settings window and capsule render on clean Windows')
     Run-Native $exe @('--local-history-check','C:\VoiceInput\synthetic-russian.wav','C:\VoiceInput\synthetic-reference.txt','C:\VoiceOutput\history.json')
     if (!(Get-Content -LiteralPath 'C:\VoiceOutput\history.json' -Raw | ConvertFrom-Json).passed) { throw 'Guest AAC recovery failed.' }
     $steps.Add('AAC history recovery verified')
