@@ -14,6 +14,7 @@ public sealed class TrayService : IDisposable
     private Icon _icon;
     private Icon _pausedIcon;
     private bool _disposed;
+    private bool _fallbackNotified;
     private readonly MainWindow _window;
     private readonly IModelManager _modelManager;
     private readonly DictationSettingsService _settingsService;
@@ -603,7 +604,16 @@ public sealed class TrayService : IDisposable
 
     private static string ShortDeviceName(string value) => value.Length <= 25 ? value : value[..24] + "…";
 
-    private void OnActivationBindingChanged(object? sender, EventArgs args) => UpdateActivationChecks();
+    private void OnActivationBindingChanged(object? sender, EventArgs args)
+    {
+        UpdateActivationChecks();
+        // Запрошенная кнопка не подключилась (например, сочетание занято другим приложением): говорим один раз.
+        if (_window.ActivationFallbackNotice is { } notice && !_fallbackNotified)
+        {
+            _fallbackNotified = true;
+            NotifyActionable(TrayNotificationKind.ActivationFallback, "Слог · кнопка запуска", notice);
+        }
+    }
 
     private void UpdateActivationChecks()
     {

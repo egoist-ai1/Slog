@@ -6,7 +6,8 @@ internal enum TrayNotificationKind
     HistoryFailure,
     ModelFailure,
     RecoveryRequired,
-    DictationSucceeded
+    DictationSucceeded,
+    ActivationFallback
 }
 
 internal static class TrayNotificationPolicy

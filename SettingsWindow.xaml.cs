@@ -903,8 +903,16 @@ public partial class SettingsWindow : Window
         {
             ActivationCombo.SelectedItem = ActivationChoices.First(choice =>
                 choice.Binding == _mainWindow.CurrentActivationBinding);
-            ActivationStatus.Text = $"Сейчас: {_mainWindow.CurrentActivationDisplayName}";
-            ActivationStatus.Foreground = MutedBrush;
+            if (_mainWindow.ActivationFallbackNotice is { } fallbackNotice)
+            {
+                ActivationStatus.Text = $"Сейчас: {_mainWindow.CurrentActivationDisplayName}. {fallbackNotice}";
+                ActivationStatus.Foreground = LoudBrush;
+            }
+            else
+            {
+                ActivationStatus.Text = $"Сейчас: {_mainWindow.CurrentActivationDisplayName}";
+                ActivationStatus.Foreground = MutedBrush;
+            }
         }
         finally
         {

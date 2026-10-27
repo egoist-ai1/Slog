@@ -161,6 +161,16 @@ public static class ActivationBindingInfo
         _ => binding.ToString()
     };
 
+    /// <summary>
+    /// Текст о том, что запрошенная привязка не подключилась и работает только запасная кнопка.
+    /// Содержит лишь имя привязки и причину, без путей и данных пользователя.
+    /// </summary>
+    public static string FallbackNotice(string requestedName, string? error)
+    {
+        var reason = string.IsNullOrWhiteSpace(error) ? "причина неизвестна" : error.Trim().TrimEnd('.', ' ');
+        return $"{requestedName} не подключилось: {reason}. Пока работает только запасная кнопка.";
+    }
+
     public static string DisplayName(ActivationConfiguration configuration) =>
         configuration.Binding == ActivationBinding.CustomKeyboard && configuration.CustomShortcut is { IsValid: true } custom
             ? custom.DisplayName
