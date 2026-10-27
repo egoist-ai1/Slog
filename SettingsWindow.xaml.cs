@@ -887,6 +887,7 @@ public partial class SettingsWindow : Window
         }
         if (_mainWindow.ReducedMotion) StopPageTransition();
         UpdateAppearanceStatus();
+        RefreshActivationState();
         // These status brushes are selected in code according to the current microphone state.
         // Re-evaluate them after the palette swap so an already-open Audio page never keeps a
         // detached brush from the previous ResourceDictionary.
