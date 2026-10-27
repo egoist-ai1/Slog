@@ -715,6 +715,14 @@ public partial class MainWindow : Window, IDisposable
             case "listening":
                 ShowListeningPreview();
                 break;
+            case "tail-full":
+            case "tail-half":
+                // Статичный кадр дуги хвоста: полная окружность и середина сжатия.
+                ShowListeningPreview();
+                _isFinishingTail = true;
+                TailArc.StrokeDashOffset = state.EndsWith("half", StringComparison.OrdinalIgnoreCase) ? 30 : 0;
+                TailArc.Visibility = Visibility.Visible;
+                break;
             case "processing":
             case "recognizing":
                 _isProcessing = true;

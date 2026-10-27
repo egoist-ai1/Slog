@@ -100,6 +100,18 @@ public sealed class MicrophoneControlTests
         Assert.Equal((AudioLevelBand)expected, AudioLevelBandPolicy.Classify(level));
 
     [Fact]
+    public void TailArcLivesInCanvasSoItIsNotClippedToTheDiscCell()
+    {
+        // Эллипс 40 больше ячейки 32: в Grid WPF обрезает его по границам ячейки (остаются углы), в Canvas нет.
+        var xaml = File.ReadAllText(Path.Combine(RepositoryRoot(), "MainWindow.xaml"));
+        var arc = xaml.IndexOf("x:Name=\"TailArc\"", StringComparison.Ordinal);
+        Assert.True(arc > 0);
+        var canvas = xaml.LastIndexOf("<Canvas", arc, StringComparison.Ordinal);
+        var canvasEnd = xaml.LastIndexOf("</Canvas>", arc, StringComparison.Ordinal);
+        Assert.True(canvas > 0 && canvas > canvasEnd, "TailArc должен быть внутри Canvas");
+    }
+
+    [Fact]
     public void SettingsSurfaceHasKeyboardCloseAndNamedAudioControls()
     {
         var xaml = File.ReadAllText(Path.Combine(RepositoryRoot(), "SettingsWindow.xaml"));

@@ -347,12 +347,15 @@
                                      IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
                                 <Ellipse.RenderTransform><ScaleTransform x:Name="StartRingScale" /></Ellipse.RenderTransform>
                             </Ellipse>
-                            <Ellipse x:Name="TailArc" Width="40" Height="40" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                     Stroke="#A8FF00" StrokeThickness="2" StrokeDashCap="Round"
-                                     StrokeDashArray="59.7 61" IsHitTestVisible="False"
-                                     RenderTransformOrigin="0.5,0.5">
-                                <Ellipse.RenderTransform><RotateTransform Angle="-90" /></Ellipse.RenderTransform>
-                            </Ellipse>
+                            <!-- Canvas: эллипс 40 больше ячейки 32, в Grid WPF обрезал бы его по границам ячейки. -->
+                            <Canvas Width="32" Height="32" IsHitTestVisible="False">
+                                <Ellipse x:Name="TailArc" Canvas.Left="-4" Canvas.Top="-4" Width="40" Height="40" Visibility="Collapsed"
+                                         Stroke="#A8FF00" StrokeThickness="2" StrokeDashCap="Round"
+                                         StrokeDashArray="59.7 61" IsHitTestVisible="False"
+                                         RenderTransformOrigin="0.5,0.5">
+                                    <Ellipse.RenderTransform><RotateTransform Angle="-90" /></Ellipse.RenderTransform>
+                                </Ellipse>
+                            </Canvas>
                             <Border x:Name="StateDisc" Margin="0" CornerRadius="16" Background="Transparent"
                                     RenderTransformOrigin="0.5,0.5">
                                 <Border.RenderTransform>
