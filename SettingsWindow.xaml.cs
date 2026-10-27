@@ -225,9 +225,9 @@ public partial class SettingsWindow : Window
         var now = DateTime.Now;
         HistoryItemsControl.ItemsSource = new[]
         {
-            new HistoryItemPresentation("preview-1", $"Сегодня, {now:HH:mm}", "0:08 · Распознано", "Остановить", "Остановить воспроизведение записи"),
-            new HistoryItemPresentation("preview-2", $"Сегодня, {now.AddMinutes(-4):HH:mm}", "0:15 · Распознано", "Слушать", "Воспроизвести запись"),
-            new HistoryItemPresentation("preview-3", "Вчера, 22:41", "0:04 · Обработка не завершена", "Слушать", "Воспроизвести запись")
+            new HistoryItemPresentation("preview-1", $"Сегодня, {now:HH:mm}", "0:08 · Распознано", "Остановить", "Остановить воспроизведение записи", false),
+            new HistoryItemPresentation("preview-2", $"Сегодня, {now.AddMinutes(-4):HH:mm}", "0:15 · Распознано", "Слушать", "Воспроизвести запись", false),
+            new HistoryItemPresentation("preview-3", "Вчера, 22:41", "0:04 · Обработка не завершена", "Слушать", "Воспроизвести запись", true)
         };
         HistoryEmptyState.Visibility = Visibility.Collapsed;
         HistoryItemsControl.Visibility = Visibility.Visible;
@@ -1278,7 +1278,8 @@ public partial class SettingsWindow : Window
         string TimeLabel,
         string DetailLabel,
         string PlayLabel,
-        string PlayAutomationName)
+        string PlayAutomationName,
+        bool Unfinished)
     {
         internal static HistoryItemPresentation From(RecentRecording item, string? playingId)
         {
@@ -1300,7 +1301,8 @@ public partial class SettingsWindow : Window
                 time,
                 $"{duration} · {status}",
                 isPlaying ? "Остановить" : "Слушать",
-                isPlaying ? "Остановить воспроизведение записи" : "Воспроизвести запись");
+                isPlaying ? "Остановить воспроизведение записи" : "Воспроизвести запись",
+                item.Status != RecentRecordingStatus.Recognized);
         }
     }
 }

@@ -636,12 +636,21 @@
                             <Border Style="{StaticResource Card}">
                                 <StackPanel>
                                     <TextBlock Text="Звуковые сигналы" Style="{StaticResource SectionTitle}" />
-                                    <TextBlock Text="Короткие сигналы подтверждают начало, остановку и ошибку. Планировщик исключает их из окна распознавания."
+                                    <TextBlock Text="Короткие сигналы подтверждают начало, остановку и ошибку. В запись они не попадают."
                                                Style="{StaticResource Hint}" Margin="0,0,0,6" />
                                     <CheckBox x:Name="SoundCheck" Content="Использовать звуковые сигналы"
                                               Checked="GeneralSetting_OnChanged" Unchecked="GeneralSetting_OnChanged"
                                               AutomationProperties.Name="Использовать звуковые сигналы" />
-                                    <Grid Margin="0,8,0,0">
+                                    <Grid Margin="0,8,0,0" IsEnabled="{Binding IsChecked, ElementName=SoundCheck}">
+                                        <Grid.Style>
+                                            <Style TargetType="Grid">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsEnabled" Value="False">
+                                                        <Setter Property="Opacity" Value="0.45" />
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Grid.Style>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="56" />
@@ -1028,8 +1037,17 @@
                                                             <StackPanel Margin="0,0,8,0" VerticalAlignment="Center">
                                                                 <TextBlock Text="{Binding TimeLabel}" FontSize="14"
                                                                            FontWeight="SemiBold" />
-                                                                <TextBlock Text="{Binding DetailLabel}" Style="{StaticResource Hint}"
-                                                                           Margin="0,3,8,0" />
+                                                                <TextBlock Text="{Binding DetailLabel}" Margin="0,3,8,0">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource Hint}">
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Unfinished}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource AppWarningBrush}" />
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
                                                             </StackPanel>
                                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                                 <Button Content="Скопировать" Tag="{Binding Id}"
@@ -1046,9 +1064,12 @@
                                                                         Tag="{Binding Id}" Style="{StaticResource CompactButton}"
                                                                         Click="HistoryPlayButton_OnClick"
                                                                         AutomationProperties.Name="{Binding PlayAutomationName}" />
-                                                                <Button Content="Удалить" Tag="{Binding Id}"
+                                                                <Button Content="&#xE74D;" Tag="{Binding Id}"
                                                                         Style="{StaticResource CompactButton}"
+                                                                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                                        MinWidth="36" Width="36" Padding="0,6"
                                                                         Click="HistoryDeleteButton_OnClick"
+                                                                        ToolTip="Удалить запись"
                                                                         AutomationProperties.Name="Удалить запись" />
                                                             </StackPanel>
                                                         </Grid>
