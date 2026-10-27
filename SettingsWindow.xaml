@@ -900,6 +900,7 @@
                                                                     <Setter TargetName="Tile" Property="BorderThickness" Value="2" />
                                                                     <Setter TargetName="Tile" Property="Padding" Value="7" />
                                                                     <Setter TargetName="Tile" Property="Background" Value="{DynamicResource AppSelectionBrush}" />
+                                                                    <Setter TargetName="Tile" Property="TextElement.Foreground" Value="{DynamicResource AppSelectionTextBrush}" />
                                                                 </Trigger>
                                                                 <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                                                     <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource AppTextPrimaryBrush}" />
