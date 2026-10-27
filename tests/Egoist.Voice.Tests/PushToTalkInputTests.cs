@@ -269,6 +269,34 @@ public sealed class PushToTalkInputTests
     }
 
     [Fact]
+    public void WatchdogGameForegroundNotHeldDoesNotReinstall()
+    {
+        var decision = HookWatchdog.Evaluate(true, false, true, false, 1, false, foregroundIsGame: true);
+
+        Assert.Equal(WatchdogVerdict.GameForeground, decision.Verdict);
+        Assert.False(decision.Reinstall);
+    }
+
+    [Fact]
+    public void WatchdogGameForegroundHeldKeepsOldLogic()
+    {
+        var wait = HookWatchdog.Evaluate(true, false, true, true, 1, false, foregroundIsGame: true);
+        var reinstall = HookWatchdog.Evaluate(true, false, true, true, 2, true, foregroundIsGame: true);
+
+        Assert.Equal(WatchdogVerdict.Wait, wait.Verdict);
+        Assert.True(reinstall.Reinstall);
+        Assert.True(reinstall.ReleaseHeld);
+    }
+
+    [Fact]
+    public void WatchdogNoGameForegroundKeepsReinstall()
+    {
+        var decision = HookWatchdog.Evaluate(true, false, true, false, 1, false, foregroundIsGame: false);
+
+        Assert.True(decision.Reinstall);
+    }
+
+    [Fact]
     public void WatchdogIgnoresSyntheticMovesAndHealthyWindows()
     {
         Assert.Equal(WatchdogVerdict.Synthetic, HookWatchdog.Evaluate(true, false, false, true, 1, true).Verdict);

@@ -40,6 +40,9 @@ public sealed class MousePushToTalkService : IDisposable
     private readonly Thread _thread;
     private LowLevelMouseProc? _callback;
     private ForegroundGameMonitor? _foreground;
+    // Предыдущее окно сторожа шло при игре на переднем плане (захват границы окна).
+    private bool _windowStartedInGame;
+    private bool _watchdogPausedLogged;
     private Exception? _startupError;
     private nint _hook;
     private uint _threadId;
@@ -242,13 +245,20 @@ public sealed class MousePushToTalkService : IDisposable
 
         var previous = _lastWatchdogCursor;
         _lastWatchdogCursor = cursor;
+        var game = _foreground?.ForegroundIsGame == true;
+        var gameWindow = game || _windowStartedInGame;
+        _windowStartedInGame = game;
+        if (!gameWindow)
+        {
+            _watchdogPausedLogged = false;
+        }
         var cursorMoved = cursor.X != previous.X || cursor.Y != previous.Y;
         var hookSeen = Volatile.Read(ref _lastHookTick) >= windowStart;
         // Опрос последнего ввода нужен только для подозрительного окна.
         var realInput = cursorMoved && !hookSeen && HadRealInputSince(windowStart, now);
         var held = _debounce.IsHeld;
         var streak = _suspectStreak + 1;
-        var decision = HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, false);
+        var decision = HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, false, gameWindow);
         switch (decision.Verdict)
         {
             case WatchdogVerdict.Healthy:
@@ -259,6 +269,16 @@ public sealed class MousePushToTalkService : IDisposable
                 // Курсор сдвинут программно: хук тут ни при чём.
                 _syntheticMoves++;
                 _suspectStreak = 0;
+                return;
+            case WatchdogVerdict.GameForeground:
+                // В игре Mouse 5 принадлежит игре: хук не трогаем, в лог пишем один раз за вход в игру.
+                _suspectStreak = 0;
+                _reinstallStreak = 0;
+                if (!_watchdogPausedLogged)
+                {
+                    _watchdogPausedLogged = true;
+                    AppLog.Write($"{ButtonName} watchdog paused for foreground game: {_foreground?.ForegroundProcessName}");
+                }
                 return;
             case WatchdogVerdict.Wait:
                 // Держим: ждём подтверждения следующим окном (_suspectStreak < 2), не рискуем ложным отпусканием.
@@ -306,7 +326,7 @@ public sealed class MousePushToTalkService : IDisposable
             return;
         }
 
-        if (HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, oldHookInvalid).ReleaseHeld)
+        if (HookWatchdog.Evaluate(cursorMoved, hookSeen, realInput, held, streak, oldHookInvalid, gameWindow).ReleaseHeld)
         {
             AppLog.Write($"{ButtonName} was still held when the hook died; releasing");
             CancelReleaseTimer();
